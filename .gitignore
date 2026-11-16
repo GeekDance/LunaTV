@@ -49,3 +49,8 @@ public/sw.js
 public/sw.js.map
 public/workbox-*.js
 public/workbox-*.js.map
+
+# Cloudflare trial artifacts and secrets
+.open-next/
+.wrangler/
+.dev.vars*

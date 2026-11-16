@@ -1,6 +1,7 @@
 /* eslint-disable no-console, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
 
 import { AdminConfig } from './admin.types';
+import { D1Storage, TrialDatabase } from './d1.db';
 import { KvrocksStorage } from './kvrocks.db';
 import { RedisStorage } from './redis.db';
 import { Favorite, IStorage, PlayRecord, SkipConfig } from './types';
@@ -13,11 +14,17 @@ const STORAGE_TYPE =
     | 'redis'
     | 'upstash'
     | 'kvrocks'
+    | 'd1'
     | undefined) || 'localstorage';
 
 // 创建存储实例
 function createStorage(): IStorage {
   switch (STORAGE_TYPE) {
+    case 'd1':
+      return new D1Storage(async () => {
+        const { getCloudflareContext } = await import('@opennextjs/cloudflare');
+        return (getCloudflareContext().env as unknown as { DB: TrialDatabase }).DB;
+      });
     case 'redis':
       return new RedisStorage();
     case 'upstash':
