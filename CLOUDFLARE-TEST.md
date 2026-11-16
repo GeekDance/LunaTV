@@ -46,6 +46,7 @@ pnpm cf:preview
 - 已将测试 Worker 设置为 `cpu_ms: 10`、`subrequests: 50`，云端版本也已读回确认。账号仍为 Paid，不能把这次结果写成真实 Free 账号已验收。
 - 临时对照探针的固定 CPU 计算触发了 Error 1102，日志为 `exceededCpu`，证明运行时确实会执行 CPU 终止。平台存在突发宽限，不能要求每条成功请求的 CPU 都小于 10ms，也不能仅凭少量成功请求推断长期稳定性。
 - 已保存不含 Cookie、请求头和查询参数的[限制测试证据](docs/cloudflare-free-limits-evidence.json)。D1 免费套餐的每日读写额度、单库容量与每次调用查询上限还需要单独核验；当前配置不会自动把 Paid 数据库变为 Free。
+- [资源核对记录](docs/cloudflare-resource-audit.json)确认测试数据库约 32KiB，播放记录等前缀查询使用主键索引；当前静态资源数量、单文件大小和启动耗时在官方免费限额内。这些是容量与查询方式检查，不替代真实免费账号验收。
 
 ```sh
 pnpm exec jest --runInBand src/lib/__tests__/d1.db.test.ts

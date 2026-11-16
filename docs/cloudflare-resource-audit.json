@@ -1,0 +1,46 @@
+{
+  "date_local": "2026-11-17",
+  "account_plan": "Workers Paid",
+  "free_account_validation": "pending explicit account creation decision",
+  "database": {
+    "database_size": 32768,
+    "num_tables": 2,
+    "read_queries_24h": 68,
+    "write_queries_24h": 54,
+    "rows_read_24h": 128,
+    "rows_written_24h": 67
+  },
+  "stored_keys": 4,
+  "prefix_query_plan": [
+    {
+      "id": 4,
+      "parent": 0,
+      "notused": 165,
+      "detail": "SEARCH lunatv_storage USING INDEX sqlite_autoindex_lunatv_storage_1 (key>? AND key<?)"
+    }
+  ],
+  "static_assets": {
+    "files": 96,
+    "largest_file_bytes": 7312537
+  },
+  "observed_deployment": {
+    "version": "fb776429-b1ab-4bcc-a92f-620b93193d06",
+    "startup_time_ms": 34,
+    "bundle_uncompressed_kib": 8677.06
+  },
+  "free_limits_to_validate": {
+    "d1_database_bytes": 500000000,
+    "d1_queries_per_invocation": 50,
+    "d1_rows_read_per_day": 5000000,
+    "d1_rows_written_per_day": 100000,
+    "static_assets_files": 20000,
+    "static_asset_bytes": 26214400,
+    "worker_startup_ms": 1000
+  },
+  "sources": [
+    "https://developers.cloudflare.com/d1/platform/limits/",
+    "https://developers.cloudflare.com/d1/platform/pricing/",
+    "https://developers.cloudflare.com/workers/platform/limits/"
+  ],
+  "conclusion": "Current isolated test data and artifacts fit the listed Free quotas; Paid-account measurements do not prove all Free quotas are enforced. No domain migration is authorized until the validation gate passes."
+}
