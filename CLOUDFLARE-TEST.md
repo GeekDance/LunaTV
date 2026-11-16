@@ -12,6 +12,23 @@
 
 ## 重建与部署
 
+### 真实免费账户测试
+
+已另建 `IceDcap LunaTV Free Test`（Workers Free，US$0），使用 `wrangler.free.jsonc`、独立数据库 `lunatv-free-test` 和命名授权 `lunatv-free`，没有降级原账号。当前地址：<https://lunatv-free-test.icedcap-lunatv-free-test.workers.dev>。
+
+```sh
+pnpm cf:build
+pnpm cf:deploy:free
+```
+
+免费配置不设置 Paid 专属 CPU 覆盖值，使用平台的真实免费限制。2026-11-17 部署与 HTTPS 已通过；真实免费环境下登录、首页 70 个条目、公开演示搜索/HLS 播放、收藏与观看记录持久化均已验证。
+
+但完整验收尚未通过：原站管理页有 118 个启用源，用 118 个公开演示源模拟后，界面显示 `118/118` 完成，聚合卡片却只有 50 个来源。当前服务器将所有来源放在一次请求中，超过免费套餐每请求 50 次外部子请求的限制，失败被吞为空结果。不得通过删减来源或降低配置页数来宣称完整运行。
+
+已恢复免费测试库为单个公开演示源，保留测试收藏和进度。下一步修复分批搜索、复测完整来源与分页覆盖，再验证原站配置/数据和正式域名切换。[真实免费测试记录](docs/cloudflare-real-free-validation.json)与前面的 Paid 限制模拟记录分开保存。
+
+### 原 Paid 对照环境
+
 需要 Node.js 22.13+（SQLite 测试需要 `node:sqlite`）和 pnpm。先登录 Wrangler 并确认目标账号；在自己的账号重建时，必须先创建独立 D1，并替换 `wrangler.jsonc` 中的数据库 ID、Worker 名称及用户名。
 
 ```sh

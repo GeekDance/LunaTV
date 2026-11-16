@@ -1,0 +1,100 @@
+{
+  "date_local": "2026-11-17",
+  "account_name": "IceDcap LunaTV Free Test",
+  "plan": "Workers Free",
+  "plan_evidence": "Cloudflare dashboard showed Free US$0 as current plan, 100000 requests/day and 10ms CPU per request.",
+  "account_id": "a4b909fc770c81031dd1f17517b5aec6",
+  "auth_profile": "lunatv-free",
+  "upstream_commit": "6c0428d1ae7a8322efa8031909ec77cac22fd866",
+  "worker": "lunatv-free-test",
+  "url": "https://lunatv-free-test.icedcap-lunatv-free-test.workers.dev",
+  "deployment_version": "39c6318c-9400-44dc-adc3-125ef316193a",
+  "runtime": {
+    "assets": {
+      "serve_directly": true,
+      "raw_run_worker_first": false,
+      "base_path": "/"
+    },
+    "compatibility_date": "2026-10-13",
+    "compatibility_flags": [
+      "nodejs_compat"
+    ],
+    "usage_model": "standard"
+  },
+  "startup_ms": 26,
+  "database": {
+    "name": "lunatv-free-test",
+    "database_size": 32768,
+    "rows_read_24h": 5,
+    "rows_written_24h": 13
+  },
+  "validation_status": "incomplete: core demo flow passed, original-scale search failed",
+  "pending": "Implement bounded search requests without reducing configured source/page coverage, rerun 118-source and pagination tests on the real Free account, then verify original configuration/data and domain cutover. Domain is unchanged.",
+  "domain_migrated": false,
+  "tls_check": {
+    "attempt": 1,
+    "hostname": "lunatv-free-test.icedcap-lunatv-free-test.workers.dev",
+    "timestamp_utc": "2026-11-16T23:28:10.235968+00:00",
+    "ok": true,
+    "tls_version": "TLSv1.2",
+    "certificate_expiry": "Feb 14 22:28:37 2027 GMT"
+  },
+  "basic_checks": {
+    "login": "passed",
+    "homepage_modules": [
+      "热门电影",
+      "热门剧集",
+      "新番放送",
+      "热门综艺"
+    ],
+    "homepage_cards": 70,
+    "demo_search": "passed",
+    "actual_hls_playback_seconds_observed": 63,
+    "browser_console_errors": 0,
+    "favorite_after_reload": "passed",
+    "continue_watching": "passed",
+    "database_persistence": [
+      {
+        "key": "user/IceDcap/records/demo+demo",
+        "title": "Big Buck Bunny · Workers 测试",
+        "play_time": 63
+      },
+      {
+        "key": "user/IceDcap/favorites/demo+demo",
+        "title": "Big Buck Bunny · Workers 测试",
+        "play_time": null
+      }
+    ]
+  },
+  "scale_check": {
+    "production_enabled_source_count_observed_in_admin_ui": 118,
+    "synthetic_public_demo_sources": 118,
+    "expected_sources_with_result": 118,
+    "actual_sources_with_result_from_aggregated_card_badge": 50,
+    "ui_completed_counter": "118/118",
+    "query": "free-scale-118-a",
+    "deployment_version": "b94ec1e8-9bbc-4c4e-a9ef-7fdaf2bf0d47",
+    "result": "failed: partial results are silently returned under the 50 external-subrequest limit"
+  },
+  "test_configuration_restored": {
+    "sources": 1,
+    "deployment_version": "6824305b-3c72-42b8-852a-eef5d42f6401"
+  },
+  "trace_summary": {
+    "requests": 86,
+    "outcomes": {
+      "ok": 85,
+      "canceled": 1
+    },
+    "exceptions_or_server_errors": [
+      {
+        "outcome": "canceled",
+        "cpu_ms": 223,
+        "status": null,
+        "path": "/api/playrecords",
+        "exceptions": []
+      }
+    ],
+    "note": "The 118-source partial search also returned HTTP 200; transport success alone is not full functionality."
+  }
+}
