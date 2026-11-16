@@ -13,7 +13,8 @@
     "binding": "ASSETS"
   },
   "limits": {
-    "cpu_ms": 100
+    "cpu_ms": 10,
+    "subrequests": 50
   },
   "vars": {
     "USERNAME": "IceDcap",

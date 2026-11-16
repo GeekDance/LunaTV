@@ -1,0 +1,694 @@
+{
+  "date_local": "2026-11-17",
+  "upstream_commit": "6c0428d1ae7a8322efa8031909ec77cac22fd866",
+  "deployment_version": "fb776429-b1ab-4bcc-a92f-620b93193d06",
+  "runtime": {
+    "assets": {
+      "serve_directly": true,
+      "raw_run_worker_first": false,
+      "base_path": "/"
+    },
+    "compatibility_date": "2026-10-13",
+    "compatibility_flags": [
+      "nodejs_compat"
+    ],
+    "usage_model": "standard",
+    "limits": {
+      "cpu_ms": 10,
+      "subrequests": 50
+    }
+  },
+  "limitations": "Paid account with configured free CPU/subrequest limits. This is not yet a real Free-account test. Platform burst allowance permits occasional CPU time above the configured 10ms. Other Free-plan quotas are not all enforced by this configuration.",
+  "application_requests": [
+    {
+      "outcome": "ok",
+      "cpu_ms": 407,
+      "wall_ms": 492,
+      "method": "GET",
+      "path": "/",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 27,
+      "wall_ms": 60,
+      "method": "GET",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 215,
+      "wall_ms": 308,
+      "method": "GET",
+      "path": "/api/favorites",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 13,
+      "wall_ms": 14,
+      "method": "GET",
+      "path": "/douban",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 36,
+      "wall_ms": 36,
+      "method": "GET",
+      "path": "/live",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 129,
+      "wall_ms": 137,
+      "method": "GET",
+      "path": "/search",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 65,
+      "wall_ms": 112,
+      "method": "GET",
+      "path": "/search",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 9,
+      "wall_ms": 44,
+      "method": "GET",
+      "path": "/api/searchhistory",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 12,
+      "wall_ms": 12,
+      "method": "GET",
+      "path": "/search",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 77,
+      "wall_ms": 199,
+      "method": "GET",
+      "path": "/api/search/ws",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 334,
+      "wall_ms": 526,
+      "method": "POST",
+      "path": "/api/searchhistory",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 15,
+      "wall_ms": 15,
+      "method": "GET",
+      "path": "/play",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 10,
+      "wall_ms": 40,
+      "method": "GET",
+      "path": "/api/favorites",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 38,
+      "wall_ms": 39,
+      "method": "GET",
+      "path": "/search",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 9,
+      "wall_ms": 58,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 9,
+      "wall_ms": 65,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 8,
+      "wall_ms": 9,
+      "method": "POST",
+      "path": "/api/logout",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 1,
+      "wall_ms": 2,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 401,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 2,
+      "wall_ms": 2,
+      "method": "GET",
+      "path": "/",
+      "status": 307,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 8,
+      "wall_ms": 22,
+      "method": "POST",
+      "path": "/api/logout",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 18,
+      "wall_ms": 20,
+      "method": "GET",
+      "path": "/login",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 1,
+      "wall_ms": 1,
+      "method": "GET",
+      "path": "/api/playrecords",
+      "status": 401,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 11,
+      "wall_ms": 12,
+      "method": "GET",
+      "path": "/login",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 3,
+      "wall_ms": 4,
+      "method": "POST",
+      "path": "/api/logout",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 7,
+      "wall_ms": 12,
+      "method": "POST",
+      "path": "/api/login",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 5,
+      "wall_ms": 6,
+      "method": "GET",
+      "path": "/play",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 6,
+      "wall_ms": 219,
+      "method": "GET",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 6,
+      "wall_ms": 199,
+      "method": "GET",
+      "path": "/api/favorites",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 180,
+      "wall_ms": 339,
+      "method": "GET",
+      "path": "/api/skipconfigs",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 6,
+      "wall_ms": 6,
+      "method": "GET",
+      "path": "/search",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 6,
+      "wall_ms": 13,
+      "method": "GET",
+      "path": "/",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 132,
+      "wall_ms": 138,
+      "method": "GET",
+      "path": "/live",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 230,
+      "wall_ms": 242,
+      "method": "GET",
+      "path": "/douban",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 77,
+      "wall_ms": 205,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 8,
+      "wall_ms": 58,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 5,
+      "wall_ms": 54,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 11,
+      "wall_ms": 80,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 8,
+      "wall_ms": 53,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 10,
+      "wall_ms": 70,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 6,
+      "wall_ms": 47,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 6,
+      "wall_ms": 92,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 7,
+      "wall_ms": 49,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 6,
+      "wall_ms": 67,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 5,
+      "wall_ms": 67,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 5,
+      "wall_ms": 55,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 5,
+      "wall_ms": 57,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 5,
+      "wall_ms": 54,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 7,
+      "wall_ms": 50,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 5,
+      "wall_ms": 55,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 5,
+      "wall_ms": 71,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 4,
+      "wall_ms": 57,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 6,
+      "wall_ms": 57,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 5,
+      "wall_ms": 65,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 4,
+      "wall_ms": 73,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 4,
+      "wall_ms": 50,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 6,
+      "wall_ms": 54,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 4,
+      "wall_ms": 52,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 4,
+      "wall_ms": 61,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 6,
+      "wall_ms": 74,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 5,
+      "wall_ms": 69,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 5,
+      "wall_ms": 60,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 6,
+      "wall_ms": 66,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 7,
+      "wall_ms": 71,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 6,
+      "wall_ms": 51,
+      "method": "POST",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 6,
+      "wall_ms": 6,
+      "method": "GET",
+      "path": "/",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 4,
+      "wall_ms": 36,
+      "method": "GET",
+      "path": "/api/playrecords",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 6,
+      "wall_ms": 43,
+      "method": "GET",
+      "path": "/api/favorites",
+      "status": 200,
+      "exceptions": []
+    }
+  ],
+  "negative_control_requests": [
+    {
+      "outcome": "ok",
+      "cpu_ms": 500,
+      "wall_ms": 509,
+      "method": "GET",
+      "path": "/",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 0,
+      "wall_ms": 1,
+      "method": "GET",
+      "path": "/favicon.ico",
+      "status": 404,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 362,
+      "wall_ms": 365,
+      "method": "GET",
+      "path": "/",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 367,
+      "wall_ms": 369,
+      "method": "GET",
+      "path": "/",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 500,
+      "wall_ms": 517,
+      "method": "GET",
+      "path": "/",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "ok",
+      "cpu_ms": 476,
+      "wall_ms": 477,
+      "method": "GET",
+      "path": "/",
+      "status": 200,
+      "exceptions": []
+    },
+    {
+      "outcome": "exceededCpu",
+      "cpu_ms": 2010,
+      "wall_ms": 2078,
+      "method": "GET",
+      "path": "/",
+      "status": 503,
+      "exceptions": [
+        "Worker exceeded CPU time limit."
+      ]
+    }
+  ]
+}
