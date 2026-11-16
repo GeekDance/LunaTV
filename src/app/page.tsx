@@ -72,9 +72,9 @@ function HomeClient() {
       try {
         setLoading(true);
 
-        // 并行获取热门电影、热门剧集和热门综艺
-        const [moviesData, tvShowsData, varietyShowsData, bangumiCalendarData] =
-          await Promise.all([
+        // 单个接口失败时保留其他模块已成功获取的数据
+        const [moviesResult, tvResult, varietyResult, bangumiResult] =
+          await Promise.allSettled([
             getDoubanCategories({
               kind: 'movie',
               category: '热门',
@@ -85,19 +85,35 @@ function HomeClient() {
             GetBangumiCalendarData(),
           ]);
 
-        if (moviesData.code === 200) {
-          setHotMovies(moviesData.list);
+        if (
+          moviesResult.status === 'fulfilled' &&
+          moviesResult.value.code === 200
+        ) {
+          setHotMovies(moviesResult.value.list);
+        }
+        if (tvResult.status === 'fulfilled' && tvResult.value.code === 200) {
+          setHotTvShows(tvResult.value.list);
+        }
+        if (
+          varietyResult.status === 'fulfilled' &&
+          varietyResult.value.code === 200
+        ) {
+          setHotVarietyShows(varietyResult.value.list);
+        }
+        if (bangumiResult.status === 'fulfilled') {
+          setBangumiCalendarData(bangumiResult.value);
         }
 
-        if (tvShowsData.code === 200) {
-          setHotTvShows(tvShowsData.list);
-        }
-
-        if (varietyShowsData.code === 200) {
-          setHotVarietyShows(varietyShowsData.list);
-        }
-
-        setBangumiCalendarData(bangumiCalendarData);
+        [moviesResult, tvResult, varietyResult, bangumiResult].forEach(
+          (result, index) => {
+            if (result.status === 'rejected') {
+              console.error(
+                `获取${['热门电影', '热门剧集', '热门综艺', '番剧日历'][index]}失败:`,
+                result.reason
+              );
+            }
+          }
+        );
       } catch (error) {
         console.error('获取推荐数据失败:', error);
       } finally {
@@ -379,11 +395,12 @@ function HomeClient() {
                             from='douban'
                             title={anime.name_cn || anime.name}
                             poster={
-                              anime.images.large ||
-                              anime.images.common ||
-                              anime.images.medium ||
-                              anime.images.small ||
-                              anime.images.grid
+                              anime.images?.large ||
+                              anime.images?.common ||
+                              anime.images?.medium ||
+                              anime.images?.small ||
+                              anime.images?.grid ||
+                              ''
                             }
                             douban_id={anime.id}
                             rate={anime.rating?.score?.toFixed(1) || ''}
