@@ -1,4 +1,4 @@
-// Original Paid account; no custom domain until validation passes. Secrets are set separately.
+// Production Paid account. The hostname route is managed in the dashboard; secrets are set separately.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "lunatv-production",

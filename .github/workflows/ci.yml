@@ -8,7 +8,7 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
@@ -44,3 +44,38 @@ jobs:
         run: pnpm build
         env:
           NEXT_PUBLIC_STORAGE_TYPE: localstorage
+
+  deploy-production:
+    name: Deploy Cloudflare production
+    needs: check
+    if: github.repository == 'GeekDance/LunaTV' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout validated commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Cloudflare production
+        run: pnpm cf:build:production
+
+      - name: Deploy existing production Worker
+        run: pnpm cf:deploy:production
+        env:
+          CLOUDFLARE_ACCOUNT_ID: dae5cd014545c39ce73e20ba9ebc7cb9
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PRODUCTION_API_TOKEN }}
