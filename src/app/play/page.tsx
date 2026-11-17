@@ -8,6 +8,7 @@ import { Heart } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 
+import { runBatchedSearch } from '@/lib/batched-search.client';
 import {
   deleteFavorite,
   deletePlayRecord,
@@ -654,37 +655,45 @@ function PlayPageClient() {
 
   // 进入页面时直接获取全部源信息
   useEffect(() => {
+    const searchController = new AbortController();
     const fetchSourceDetail = async (
       source: string,
       id: string
     ): Promise<SearchResult[]> => {
       try {
         const detailResponse = await fetch(
-          `/api/detail?source=${source}&id=${id}`
+          `/api/detail?source=${source}&id=${id}`, { signal: searchController.signal }
         );
         if (!detailResponse.ok) {
           throw new Error('获取视频详情失败');
         }
         const detailData = (await detailResponse.json()) as SearchResult;
-        setAvailableSources([detailData]);
+        if (!searchController.signal.aborted) setAvailableSources([detailData]);
         return [detailData];
       } catch (err) {
         console.error('获取视频详情失败:', err);
         return [];
       } finally {
-        setSourceSearchLoading(false);
+        if (!searchController.signal.aborted) setSourceSearchLoading(false);
       }
     };
     const fetchSourcesData = async (query: string): Promise<SearchResult[]> => {
       // 根据搜索词获取全部源信息
       try {
-        const response = await fetch(
-          `/api/search?q=${encodeURIComponent(query.trim())}`
-        );
-        if (!response.ok) {
-          throw new Error('搜索失败');
+        let data: { results: SearchResult[] };
+        if (process.env.NEXT_PUBLIC_STORAGE_TYPE === 'd1') {
+          data = { results: await runBatchedSearch(query.trim(), {
+            signal: searchController.signal,
+            onSource: source => {
+              if (source.error && !searchController.signal.aborted) setSourceSearchError('部分来源暂不可用');
+            },
+          }) };
+        } else {
+          const response = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`, { signal: searchController.signal });
+          if (!response.ok) throw new Error('搜索失败');
+          data = await response.json();
         }
-        const data = await response.json();
+        if (searchController.signal.aborted) return [];
 
         // 处理搜索结果，根据规则过滤
         const results = data.results.filter(
@@ -702,11 +711,12 @@ function PlayPageClient() {
         setAvailableSources(results);
         return results;
       } catch (err) {
+        if (searchController.signal.aborted) return [];
         setSourceSearchError(err instanceof Error ? err.message : '搜索失败');
         setAvailableSources([]);
         return [];
       } finally {
-        setSourceSearchLoading(false);
+        if (!searchController.signal.aborted) setSourceSearchLoading(false);
       }
     };
 
@@ -725,6 +735,7 @@ function PlayPageClient() {
       );
 
       let sourcesInfo = await fetchSourcesData(searchTitle || videoTitle);
+      if (searchController.signal.aborted) return;
       if (
         currentSource &&
         currentId &&
@@ -734,6 +745,7 @@ function PlayPageClient() {
       ) {
         sourcesInfo = await fetchSourceDetail(currentSource, currentId);
       }
+      if (searchController.signal.aborted) return;
       if (sourcesInfo.length === 0) {
         setError('未找到匹配结果');
         setLoading(false);
@@ -799,6 +811,7 @@ function PlayPageClient() {
     };
 
     initAll();
+    return () => searchController.abort();
   }, []);
 
   // 播放记录处理

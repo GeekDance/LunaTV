@@ -8,7 +8,7 @@
   "upstream_commit": "6c0428d1ae7a8322efa8031909ec77cac22fd866",
   "worker": "lunatv-free-test",
   "url": "https://lunatv-free-test.icedcap-lunatv-free-test.workers.dev",
-  "deployment_version": "39c6318c-9400-44dc-adc3-125ef316193a",
+  "deployment_version": "a67e8599-9cd4-4e0d-a6b7-2c152f02ac89",
   "runtime": {
     "assets": {
       "serve_directly": true,
@@ -28,8 +28,8 @@
     "rows_read_24h": 5,
     "rows_written_24h": 13
   },
-  "validation_status": "incomplete: core demo flow passed, original-scale search failed",
-  "pending": "Implement bounded search requests without reducing configured source/page coverage, rerun 118-source and pagination tests on the real Free account, then verify original configuration/data and domain cutover. Domain is unchanged.",
+  "validation_status": "core functionality and full-scale search passed on real Free; CPU peak risk remains; user selected existing Paid plan for production",
+  "pending": "Prepare independent production deployment on original Paid account preserving original data, validate before domain cutover. Keep Free test deployment.",
   "domain_migrated": false,
   "tls_check": {
     "attempt": 1,
@@ -78,7 +78,13 @@
   },
   "test_configuration_restored": {
     "sources": 1,
-    "deployment_version": "6824305b-3c72-42b8-852a-eef5d42f6401"
+    "max_pages": 1,
+    "deployment_version": "a67e8599-9cd4-4e0d-a6b7-2c152f02ac89",
+    "database_bytes": 40960,
+    "favorite_retained": true,
+    "play_progress_seconds": 16,
+    "homepage_cards": 70,
+    "continue_watching_cards": 1
   },
   "trace_summary": {
     "requests": 86,
@@ -96,5 +102,47 @@
       }
     ],
     "note": "The 118-source partial search also returned HTTP 200; transport success alone is not full functionality."
-  }
+  },
+  "search_fix_validation": {
+    "implementation_commit": "fe38899",
+    "final_reviewed_version": "a9fd53c4-0ce9-4d7e-abe4-06624696e714",
+    "incremental_118_one_page": {
+      "query": "free-fixed-118-a",
+      "sources_with_result": 118
+    },
+    "incremental_118_three_pages": {
+      "query": "free-pages-118-b",
+      "sources_with_result": 118,
+      "pages_per_source": 3,
+      "note": "Static public fixture repeats one ID across pages; browser deduplicates it. Unit tests separately cover distinct IDs across all pages."
+    },
+    "ordinary_118_three_pages": {
+      "query": "free-normal-final-118-d",
+      "sources_with_result": 118
+    },
+    "cancel_and_replace": {
+      "old_query": "free-cancel-118-d",
+      "new_query": "free-cancel-118-e",
+      "new_sources_with_result": 118,
+      "note": "Old query canceled before source results; new query completed. Unit test verifies no new jobs after abort."
+    },
+    "one_unavailable_source": {
+      "query": "free-mixed-118-c",
+      "completed_sources": 118,
+      "sources_with_result": 117,
+      "visible_unavailable_count": 1,
+      "playback_source_cards": 117,
+      "actual_playback_seconds": 16.9,
+      "version": "70d770d1-ce3c-4890-9345-27b41d3bbd79"
+    },
+    "tests_passed": 28,
+    "browser_console_errors": 0
+  },
+  "resource_caveats": {
+    "max_sampled_cpu_ms": 552,
+    "sampled_requests_note": "Tail is sampled, not an exhaustive trace. Successful requests include CPU peaks above the advertised 10 ms. Do not claim hard per-request compliance or guaranteed production stability.",
+    "official_cpu_rollover_reference": "https://developers.cloudflare.com/workers/observability/metrics-and-analytics/#cpu-time-per-execution",
+    "daily_request_budget_example": "118 sources x 3 pages = 354 page invocations plus manifest/page and other app calls; 100000 daily requests is shared across the Free account."
+  },
+  "production_decision": "User explicitly selected existing shared Paid plan for production and retention of independent Free test site."
 }

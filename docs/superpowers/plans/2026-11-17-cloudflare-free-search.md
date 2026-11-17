@@ -1,6 +1,6 @@
 # Cloudflare Free Search Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Search all configured sources and pages on Workers Free without silently losing results at the per-invocation subrequest limit.
 
@@ -31,10 +31,10 @@
 
 **Interfaces:** `SearchManifest { sources: {key:string; name:string}[]; maxPages:number }`; `SearchPageResponse { source:string; page:number; results:SearchResult[]; pageCount?:number; error?:string }`. Manifest GET returns only authorized source keys/names. Page GET accepts `q`, `source`, integer `page`, validates authorization and page bounds, then makes one downstream page request using existing parsing/cache behavior.
 
-- [ ] Write and run failing tests for unauthorized/banned users, disabled/unknown sources, invalid page bounds, and one-page fetch count.
-- [ ] Export a focused one-page downstream function; preserve full-search behavior for non-D1 callers. Carry meaningful error state instead of swallowing a resource or network failure.
-- [ ] Implement manifest/page routes, private no-store responses and server-side source/page validation. Never accept upstream URLs from the client.
-- [ ] Run tests and typecheck. Verify the manifest does not contain API URLs.
+- [x] Write and run failing tests for unauthorized/banned users, disabled/unknown sources, invalid page bounds, and one-page fetch count.
+- [x] Export a focused one-page downstream function; preserve full-search behavior for non-D1 callers. Carry meaningful error state instead of swallowing a resource or network failure.
+- [x] Implement manifest/page routes, private no-store responses and server-side source/page validation. Never accept upstream URLs from the client.
+- [x] Run tests and typecheck. Verify the manifest does not contain API URLs.
 
 ### Task 2: Coordinate all sources and pages in the browser
 
@@ -42,18 +42,18 @@
 
 **Interface:** `runBatchedSearch(query, {signal, onStart?, onSource?}): Promise<SearchResult[]>`. `onStart(totalSources)` fires once; `onSource({source, sourceName, results, error?})` fires once per finished source, after all of its configured pages. A maximum of four page requests are active at any instant. Scheduling remains bounded even for large configured page counts.
 
-- [ ] Write a failing regression with 118 one-page source fixtures: assert all 118 distinct sources return, no request searches multiple upstream sources, and concurrency never exceeds four.
-- [ ] Add failing tests for three-page coverage, empty pages, a failing page without dropping other sources, and cancellation without new scheduled requests.
-- [ ] Implement the coordinator with injectable fetch only at the transport boundary for tests. Preserve every configured source/page and stable source identifiers.
-- [ ] Run all coordinator tests and the existing D1 tests.
+- [x] Write a failing regression with 118 one-page source fixtures: assert all 118 distinct sources return, no request searches multiple upstream sources, and concurrency never exceeds four.
+- [x] Add failing tests for three-page coverage, empty pages, a failing page without dropping other sources, and cancellation without new scheduled requests.
+- [x] Implement the coordinator with injectable fetch only at the transport boundary for tests. Preserve every configured source/page and stable source identifiers.
+- [x] Run all coordinator tests and the existing D1 tests.
 
 ### Task 3: Integrate complete search and retest Free deployment
 
 **Files:** `src/app/search/page.tsx`, `src/app/play/page.tsx`, relevant tests, `CLOUDFLARE-TEST.md`, `docs/cloudflare-real-free-validation.json`.
 
-- [ ] Wire D1 search modes and play-page automatic lookup to the coordinator. Keep existing sorting, aggregation, history, result flushing and non-D1 code paths. Abort previous D1 work on a new query/unmount.
-- [ ] Display unavailable-source feedback without presenting failures as successful empty results. Test cancellation and ordinary search mode as well as incremental mode.
-- [ ] Run the complete Jest suite, typecheck, changed-file lint, and a fresh OpenNext build.
-- [ ] Deploy only `wrangler.free.jsonc` with profile `lunatv-free`. Repeat 118-source and multi-page public-fixture tests using fresh queries and cloud logs; assert 118 sources contribute results, not merely that all attempts completed.
-- [ ] Repeat login/home/playback/favorites/progress checks. Restore the normal public demo configuration after stress tests and save sanitized evidence.
-- [ ] Review remaining original-configuration/data and same-account domain-binding constraints before any production cutover. Do not claim the goal complete while these remain unresolved.
+- [x] Wire D1 search modes and play-page automatic lookup to the coordinator. Keep existing sorting, aggregation, history, result flushing and non-D1 code paths. Abort previous D1 work on a new query/unmount.
+- [x] Display unavailable-source feedback without presenting failures as successful empty results. Test cancellation and ordinary search mode as well as incremental mode.
+- [x] Run the complete Jest suite, typecheck, changed-file lint, and a fresh OpenNext build.
+- [x] Deploy only `wrangler.free.jsonc` with profile `lunatv-free`. Repeat 118-source and multi-page public-fixture tests using fresh queries and cloud logs; assert 118 sources contribute results, not merely that all attempts completed.
+- [x] Repeat login/home/playback/favorites/progress checks. Restore the normal public demo configuration after stress tests and save sanitized evidence.
+- [x] Review remaining original-configuration/data and same-account domain-binding constraints before any production cutover. Do not claim the goal complete while these remain unresolved.

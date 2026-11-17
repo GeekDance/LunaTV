@@ -5,6 +5,7 @@ import { ChevronUp, Search, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import React, { startTransition, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
+import { runBatchedSearch } from '@/lib/batched-search.client';
 import {
   addSearchHistory,
   clearSearchHistory,
@@ -35,6 +36,9 @@ function SearchPageClient() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const batchAbortRef = useRef<AbortController | null>(null);
+  const [failedSources, setFailedSources] = useState(0);
+  const [searchError, setSearchError] = useState('');
   const [totalSources, setTotalSources] = useState(0);
   const [completedSources, setCompletedSources] = useState(0);
   const pendingResultsRef = useRef<SearchResult[]>([]);
@@ -405,6 +409,10 @@ function SearchPageClient() {
     // 当搜索参数变化时更新搜索状态
     const query = searchParams.get('q') || '';
     currentQueryRef.current = query.trim();
+    batchAbortRef.current?.abort();
+    batchAbortRef.current = null;
+    setFailedSources(0);
+    setSearchError('');
 
     if (query) {
       setSearchQuery(query);
@@ -444,7 +452,52 @@ function SearchPageClient() {
         setUseFluidSearch(currentFluidSearch);
       }
 
-      if (currentFluidSearch) {
+      if (process.env.NEXT_PUBLIC_STORAGE_TYPE === 'd1') {
+        const controller = new AbortController();
+        batchAbortRef.current = controller;
+        const active = () => !controller.signal.aborted && currentQueryRef.current === trimmed;
+        const append = (results: SearchResult[]) => {
+          const activeYearOrder = viewMode === 'agg' ? filterAgg.yearOrder : filterAll.yearOrder;
+          const incoming = activeYearOrder === 'none' ? sortBatchForNoOrder(results) : results;
+          pendingResultsRef.current.push(...incoming);
+          if (!flushTimerRef.current) {
+            flushTimerRef.current = window.setTimeout(() => {
+              if (!active()) return;
+              const pending = pendingResultsRef.current;
+              pendingResultsRef.current = [];
+              startTransition(() => setSearchResults(prev => prev.concat(pending)));
+              flushTimerRef.current = null;
+            }, 80);
+          }
+        };
+        runBatchedSearch(trimmed, {
+          signal: controller.signal,
+          onStart: total => { if (active()) setTotalSources(total); },
+          onSource: source => {
+            if (!active()) return;
+            setCompletedSources(prev => prev + 1);
+            if (source.error) setFailedSources(prev => prev + 1);
+            if (currentFluidSearch && source.results.length) append(source.results);
+          },
+        }).then(results => {
+          if (active() && !currentFluidSearch) {
+            const activeYearOrder = viewMode === 'agg' ? filterAgg.yearOrder : filterAll.yearOrder;
+            setSearchResults(activeYearOrder === 'none' ? sortBatchForNoOrder(results) : results);
+          }
+        }).catch(error => {
+          if (active()) setSearchError(error instanceof Error ? error.message : '搜索失败');
+        }).finally(() => {
+          if (!active()) return;
+          if (flushTimerRef.current) {
+            clearTimeout(flushTimerRef.current);
+            flushTimerRef.current = null;
+          }
+          const pending = pendingResultsRef.current;
+          pendingResultsRef.current = [];
+          if (pending.length) startTransition(() => setSearchResults(prev => prev.concat(pending)));
+          setIsLoading(false);
+        });
+      } else if (currentFluidSearch) {
         // 流式搜索：打开新的流式连接
         const es = new EventSource(`/api/search/ws?q=${encodeURIComponent(trimmed)}`);
         eventSourceRef.current = es;
@@ -565,6 +618,7 @@ function SearchPageClient() {
   // 组件卸载时，关闭可能存在的连接
   useEffect(() => {
     return () => {
+      batchAbortRef.current?.abort();
       if (eventSourceRef.current) {
         try { eventSourceRef.current.close(); } catch { }
         eventSourceRef.current = null;
@@ -716,6 +770,8 @@ function SearchPageClient() {
                     </span>
                   )}
                 </h2>
+                {failedSources > 0 && <p role='status' className='mt-2 text-sm text-amber-600'>部分来源暂不可用（{failedSources}）</p>}
+                {searchError && <p role='alert' className='mt-2 text-sm text-red-600'>{searchError}</p>}
               </div>
               {/* 筛选器 + 聚合开关 同行 */}
               <div className='mb-8 flex items-center justify-between gap-3'>
