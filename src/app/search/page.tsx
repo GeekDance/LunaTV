@@ -5,6 +5,7 @@ import { ChevronUp, Search, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import React, { startTransition, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
+import { runBatchedSearch } from '@/lib/batched-search.client';
 import {
   addSearchHistory,
   clearSearchHistory,
@@ -18,6 +19,7 @@ import PageLayout from '@/components/PageLayout';
 import SearchResultFilter, { SearchFilterCategory } from '@/components/SearchResultFilter';
 import SearchSuggestions from '@/components/SearchSuggestions';
 import VideoCard, { VideoCardHandle } from '@/components/VideoCard';
+import VirtualGrid from '@/components/VirtualGrid';
 
 function SearchPageClient() {
   // 搜索历史
@@ -34,6 +36,9 @@ function SearchPageClient() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const batchAbortRef = useRef<AbortController | null>(null);
+  const [failedSources, setFailedSources] = useState(0);
+  const [searchError, setSearchError] = useState('');
   const [totalSources, setTotalSources] = useState(0);
   const [completedSources, setCompletedSources] = useState(0);
   const pendingResultsRef = useRef<SearchResult[]>([]);
@@ -404,6 +409,10 @@ function SearchPageClient() {
     // 当搜索参数变化时更新搜索状态
     const query = searchParams.get('q') || '';
     currentQueryRef.current = query.trim();
+    batchAbortRef.current?.abort();
+    batchAbortRef.current = null;
+    setFailedSources(0);
+    setSearchError('');
 
     if (query) {
       setSearchQuery(query);
@@ -443,7 +452,52 @@ function SearchPageClient() {
         setUseFluidSearch(currentFluidSearch);
       }
 
-      if (currentFluidSearch) {
+      if (process.env.NEXT_PUBLIC_STORAGE_TYPE === 'd1') {
+        const controller = new AbortController();
+        batchAbortRef.current = controller;
+        const active = () => !controller.signal.aborted && currentQueryRef.current === trimmed;
+        const append = (results: SearchResult[]) => {
+          const activeYearOrder = viewMode === 'agg' ? filterAgg.yearOrder : filterAll.yearOrder;
+          const incoming = activeYearOrder === 'none' ? sortBatchForNoOrder(results) : results;
+          pendingResultsRef.current.push(...incoming);
+          if (!flushTimerRef.current) {
+            flushTimerRef.current = window.setTimeout(() => {
+              if (!active()) return;
+              const pending = pendingResultsRef.current;
+              pendingResultsRef.current = [];
+              startTransition(() => setSearchResults(prev => prev.concat(pending)));
+              flushTimerRef.current = null;
+            }, 80);
+          }
+        };
+        runBatchedSearch(trimmed, {
+          signal: controller.signal,
+          onStart: total => { if (active()) setTotalSources(total); },
+          onSource: source => {
+            if (!active()) return;
+            setCompletedSources(prev => prev + 1);
+            if (source.error) setFailedSources(prev => prev + 1);
+            if (currentFluidSearch && source.results.length) append(source.results);
+          },
+        }).then(results => {
+          if (active() && !currentFluidSearch) {
+            const activeYearOrder = viewMode === 'agg' ? filterAgg.yearOrder : filterAll.yearOrder;
+            setSearchResults(activeYearOrder === 'none' ? sortBatchForNoOrder(results) : results);
+          }
+        }).catch(error => {
+          if (active()) setSearchError(error instanceof Error ? error.message : '搜索失败');
+        }).finally(() => {
+          if (!active()) return;
+          if (flushTimerRef.current) {
+            clearTimeout(flushTimerRef.current);
+            flushTimerRef.current = null;
+          }
+          const pending = pendingResultsRef.current;
+          pendingResultsRef.current = [];
+          if (pending.length) startTransition(() => setSearchResults(prev => prev.concat(pending)));
+          setIsLoading(false);
+        });
+      } else if (currentFluidSearch) {
         // 流式搜索：打开新的流式连接
         const es = new EventSource(`/api/search/ws?q=${encodeURIComponent(trimmed)}`);
         eventSourceRef.current = es;
@@ -564,6 +618,7 @@ function SearchPageClient() {
   // 组件卸载时，关闭可能存在的连接
   useEffect(() => {
     return () => {
+      batchAbortRef.current?.abort();
       if (eventSourceRef.current) {
         try { eventSourceRef.current.close(); } catch { }
         eventSourceRef.current = null;
@@ -715,6 +770,8 @@ function SearchPageClient() {
                     </span>
                   )}
                 </h2>
+                {failedSources > 0 && <p role='status' className='mt-2 text-sm text-amber-600'>部分来源暂不可用（{failedSources}）</p>}
+                {searchError && <p role='alert' className='mt-2 text-sm text-red-600'>{searchError}</p>}
               </div>
               {/* 筛选器 + 聚合开关 同行 */}
               <div className='mb-8 flex items-center justify-between gap-3'>
@@ -759,69 +816,79 @@ function SearchPageClient() {
                   </div>
                 )
               ) : (
-                <div
-                  key={`search-results-${viewMode}`}
-                  className='justify-start grid grid-cols-3 gap-x-2 gap-y-14 sm:gap-y-20 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8'
-                >
-                  {viewMode === 'agg'
-                    ? filteredAggResults.map(([mapKey, group]) => {
-                      const title = group[0]?.title || '';
-                      const poster = group[0]?.poster || '';
-                      const year = group[0]?.year || 'unknown';
-                      const { episodes, source_names, douban_id } = computeGroupStats(group);
-                      const type = episodes === 1 ? 'movie' : 'tv';
+                <div key={`search-results-${viewMode}`}>
+                  {viewMode === 'agg' ? (
+                    <VirtualGrid
+                      items={filteredAggResults}
+                      className='grid-cols-3 gap-x-2 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8'
+                      rowGapClass='pb-14 sm:pb-20'
+                      estimateRowHeight={320}
+                      renderItem={([mapKey, group]) => {
+                        const title = group[0]?.title || '';
+                        const poster = group[0]?.poster || '';
+                        const year = group[0]?.year || 'unknown';
+                        const { episodes, source_names, douban_id } = computeGroupStats(group);
+                        const type = episodes === 1 ? 'movie' : 'tv';
 
-                      // 如果该聚合第一次出现，写入初始统计
-                      if (!groupStatsRef.current.has(mapKey)) {
-                        groupStatsRef.current.set(mapKey, { episodes, source_names, douban_id });
-                      }
+                        if (!groupStatsRef.current.has(mapKey)) {
+                          groupStatsRef.current.set(mapKey, { episodes, source_names, douban_id });
+                        }
 
-                      return (
-                        <div key={`agg-${mapKey}`} className='w-full'>
+                        return (
+                          <div key={`agg-${mapKey}`} className='w-full'>
+                            <VideoCard
+                              ref={getGroupRef(mapKey)}
+                              from='search'
+                              isAggregate={true}
+                              title={title}
+                              poster={poster}
+                              year={year}
+                              episodes={episodes}
+                              source_names={source_names}
+                              douban_id={douban_id}
+                              query={
+                                searchQuery.trim() !== title
+                                  ? searchQuery.trim()
+                                  : ''
+                              }
+                              type={type}
+                            />
+                          </div>
+                        );
+                      }}
+                    />
+                  ) : (
+                    <VirtualGrid
+                      items={filteredAllResults}
+                      className='grid-cols-3 gap-x-2 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8'
+                      rowGapClass='pb-14 sm:pb-20'
+                      estimateRowHeight={320}
+                      renderItem={(item) => (
+                        <div
+                          key={`all-${item.source}-${item.id}`}
+                          className='w-full'
+                        >
                           <VideoCard
-                            ref={getGroupRef(mapKey)}
-                            from='search'
-                            isAggregate={true}
-                            title={title}
-                            poster={poster}
-                            year={year}
-                            episodes={episodes}
-                            source_names={source_names}
-                            douban_id={douban_id}
+                            id={item.id}
+                            title={item.title}
+                            poster={item.poster}
+                            episodes={item.episodes.length}
+                            source={item.source}
+                            source_name={item.source_name}
+                            douban_id={item.douban_id}
                             query={
-                              searchQuery.trim() !== title
+                              searchQuery.trim() !== item.title
                                 ? searchQuery.trim()
                                 : ''
                             }
-                            type={type}
+                            year={item.year}
+                            from='search'
+                            type={item.episodes.length > 1 ? 'tv' : 'movie'}
                           />
                         </div>
-                      );
-                    })
-                    : filteredAllResults.map((item) => (
-                      <div
-                        key={`all-${item.source}-${item.id}`}
-                        className='w-full'
-                      >
-                        <VideoCard
-                          id={item.id}
-                          title={item.title}
-                          poster={item.poster}
-                          episodes={item.episodes.length}
-                          source={item.source}
-                          source_name={item.source_name}
-                          douban_id={item.douban_id}
-                          query={
-                            searchQuery.trim() !== item.title
-                              ? searchQuery.trim()
-                              : ''
-                          }
-                          year={item.year}
-                          from='search'
-                          type={item.episodes.length > 1 ? 'tv' : 'movie'}
-                        />
-                      </div>
-                    ))}
+                      )}
+                    />
+                  )}
                 </div>
               )}
             </section>

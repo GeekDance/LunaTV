@@ -1,0 +1,148 @@
+{
+  "date_local": "2026-11-17",
+  "account_name": "IceDcap LunaTV Free Test",
+  "plan": "Workers Free",
+  "plan_evidence": "Cloudflare dashboard showed Free US$0 as current plan, 100000 requests/day and 10ms CPU per request.",
+  "account_id": "a4b909fc770c81031dd1f17517b5aec6",
+  "auth_profile": "lunatv-free",
+  "upstream_commit": "6c0428d1ae7a8322efa8031909ec77cac22fd866",
+  "worker": "lunatv-free-test",
+  "url": "https://lunatv-free-test.icedcap-lunatv-free-test.workers.dev",
+  "deployment_version": "a67e8599-9cd4-4e0d-a6b7-2c152f02ac89",
+  "runtime": {
+    "assets": {
+      "serve_directly": true,
+      "raw_run_worker_first": false,
+      "base_path": "/"
+    },
+    "compatibility_date": "2026-10-13",
+    "compatibility_flags": [
+      "nodejs_compat"
+    ],
+    "usage_model": "standard"
+  },
+  "startup_ms": 26,
+  "database": {
+    "name": "lunatv-free-test",
+    "database_size": 32768,
+    "rows_read_24h": 5,
+    "rows_written_24h": 13
+  },
+  "validation_status": "Free core and full-source tests passed with documented CPU risk; user-selected Paid production and original-hostname validation completed",
+  "pending": "Free test retained. Production uses existing shared Paid account and original Upstash data; original hostname routing and core checks passed. See cloudflare-production-validation.json.",
+  "domain_migrated": true,
+  "tls_check": {
+    "attempt": 1,
+    "hostname": "lunatv-free-test.icedcap-lunatv-free-test.workers.dev",
+    "timestamp_utc": "2026-11-16T23:28:10.235968+00:00",
+    "ok": true,
+    "tls_version": "TLSv1.2",
+    "certificate_expiry": "Feb 14 22:28:37 2027 GMT"
+  },
+  "basic_checks": {
+    "login": "passed",
+    "homepage_modules": [
+      "热门电影",
+      "热门剧集",
+      "新番放送",
+      "热门综艺"
+    ],
+    "homepage_cards": 70,
+    "demo_search": "passed",
+    "actual_hls_playback_seconds_observed": 63,
+    "browser_console_errors": 0,
+    "favorite_after_reload": "passed",
+    "continue_watching": "passed",
+    "database_persistence": [
+      {
+        "key": "user/IceDcap/records/demo+demo",
+        "title": "Big Buck Bunny · Workers 测试",
+        "play_time": 63
+      },
+      {
+        "key": "user/IceDcap/favorites/demo+demo",
+        "title": "Big Buck Bunny · Workers 测试",
+        "play_time": null
+      }
+    ]
+  },
+  "scale_check": {
+    "production_enabled_source_count_observed_in_admin_ui": 118,
+    "synthetic_public_demo_sources": 118,
+    "expected_sources_with_result": 118,
+    "actual_sources_with_result_from_aggregated_card_badge": 50,
+    "ui_completed_counter": "118/118",
+    "query": "free-scale-118-a",
+    "deployment_version": "b94ec1e8-9bbc-4c4e-a9ef-7fdaf2bf0d47",
+    "result": "failed: partial results are silently returned under the 50 external-subrequest limit"
+  },
+  "test_configuration_restored": {
+    "sources": 1,
+    "max_pages": 1,
+    "deployment_version": "a67e8599-9cd4-4e0d-a6b7-2c152f02ac89",
+    "database_bytes": 40960,
+    "favorite_retained": true,
+    "play_progress_seconds": 16,
+    "homepage_cards": 70,
+    "continue_watching_cards": 1
+  },
+  "trace_summary": {
+    "requests": 86,
+    "outcomes": {
+      "ok": 85,
+      "canceled": 1
+    },
+    "exceptions_or_server_errors": [
+      {
+        "outcome": "canceled",
+        "cpu_ms": 223,
+        "status": null,
+        "path": "/api/playrecords",
+        "exceptions": []
+      }
+    ],
+    "note": "The 118-source partial search also returned HTTP 200; transport success alone is not full functionality."
+  },
+  "search_fix_validation": {
+    "implementation_commit": "fe38899",
+    "final_reviewed_version": "a9fd53c4-0ce9-4d7e-abe4-06624696e714",
+    "incremental_118_one_page": {
+      "query": "free-fixed-118-a",
+      "sources_with_result": 118
+    },
+    "incremental_118_three_pages": {
+      "query": "free-pages-118-b",
+      "sources_with_result": 118,
+      "pages_per_source": 3,
+      "note": "Static public fixture repeats one ID across pages; browser deduplicates it. Unit tests separately cover distinct IDs across all pages."
+    },
+    "ordinary_118_three_pages": {
+      "query": "free-normal-final-118-d",
+      "sources_with_result": 118
+    },
+    "cancel_and_replace": {
+      "old_query": "free-cancel-118-d",
+      "new_query": "free-cancel-118-e",
+      "new_sources_with_result": 118,
+      "note": "Old query canceled before source results; new query completed. Unit test verifies no new jobs after abort."
+    },
+    "one_unavailable_source": {
+      "query": "free-mixed-118-c",
+      "completed_sources": 118,
+      "sources_with_result": 117,
+      "visible_unavailable_count": 1,
+      "playback_source_cards": 117,
+      "actual_playback_seconds": 16.9,
+      "version": "70d770d1-ce3c-4890-9345-27b41d3bbd79"
+    },
+    "tests_passed": 28,
+    "browser_console_errors": 0
+  },
+  "resource_caveats": {
+    "max_sampled_cpu_ms": 552,
+    "sampled_requests_note": "Tail is sampled, not an exhaustive trace. Successful requests include CPU peaks above the advertised 10 ms. Do not claim hard per-request compliance or guaranteed production stability.",
+    "official_cpu_rollover_reference": "https://developers.cloudflare.com/workers/observability/metrics-and-analytics/#cpu-time-per-execution",
+    "daily_request_budget_example": "118 sources x 3 pages = 354 page invocations plus manifest/page and other app calls; 100000 daily requests is shared across the Free account."
+  },
+  "production_decision": "User explicitly selected existing shared Paid plan for production and retention of independent Free test site."
+}

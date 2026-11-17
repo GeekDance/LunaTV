@@ -1,6 +1,7 @@
 /* eslint-disable no-console, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
 
 import { AdminConfig } from './admin.types';
+import { D1Storage, TrialDatabase } from './d1.db';
 import { KvrocksStorage } from './kvrocks.db';
 import { RedisStorage } from './redis.db';
 import { Favorite, IStorage, PlayRecord, SkipConfig } from './types';
@@ -13,11 +14,17 @@ const STORAGE_TYPE =
     | 'redis'
     | 'upstash'
     | 'kvrocks'
+    | 'd1'
     | undefined) || 'localstorage';
 
 // 创建存储实例
 function createStorage(): IStorage {
   switch (STORAGE_TYPE) {
+    case 'd1':
+      return new D1Storage(async () => {
+        const { getCloudflareContext } = await import('@opennextjs/cloudflare');
+        return (getCloudflareContext().env as unknown as { DB: TrialDatabase }).DB;
+      });
     case 'redis':
       return new RedisStorage();
     case 'upstash':
@@ -48,9 +55,50 @@ export function generateStorageKey(source: string, id: string): string {
 // 导出便捷方法
 export class DbManager {
   private storage: IStorage;
+  private migrationPromise: Promise<void> | null = null;
+  private migrationComplete = false;
+  private requestMigrations = new WeakMap<object, Promise<void>>();
 
   constructor() {
     this.storage = getStorage();
+  }
+
+  /** 在等待数据的请求内迁移，避免 Worker 复用已结束请求的 Promise。 */
+  private async ensureMigrated(): Promise<void> {
+    if (this.migrationComplete) return;
+    if (!this.storage || typeof this.storage.migrateData !== 'function') {
+      this.migrationComplete = true;
+      return;
+    }
+    let requestContext: object | undefined;
+    try {
+      const { getCloudflareContext } = await import('@opennextjs/cloudflare');
+      requestContext = getCloudflareContext().ctx;
+    } catch {
+      // Other supported runtimes retain their shared in-flight migration.
+    }
+    // Another call may have finished while the runtime module loaded.
+    if (this.migrationComplete) return;
+    let pending = requestContext
+      ? this.requestMigrations.get(requestContext)
+      : this.migrationPromise;
+    if (!pending) {
+      pending = this.storage.migrateData().then(async () => {
+        // 数据结构迁移完成后，执行密码哈希迁移
+        if (typeof this.storage.migratePasswords === 'function') {
+          await this.storage.migratePasswords();
+        }
+      }).catch((err) => {
+        console.error('数据迁移异常:', err);
+      }).finally(() => {
+        this.migrationComplete = true;
+        if (requestContext) this.requestMigrations.delete(requestContext);
+        else this.migrationPromise = null;
+      });
+      if (requestContext) this.requestMigrations.set(requestContext, pending);
+      else this.migrationPromise = pending;
+    }
+    await pending;
   }
 
   // 播放记录相关方法
@@ -76,6 +124,7 @@ export class DbManager {
   async getAllPlayRecords(userName: string): Promise<{
     [key: string]: PlayRecord;
   }> {
+    await this.ensureMigrated();
     return this.storage.getAllPlayRecords(userName);
   }
 
@@ -86,6 +135,10 @@ export class DbManager {
   ): Promise<void> {
     const key = generateStorageKey(source, id);
     await this.storage.deletePlayRecord(userName, key);
+  }
+
+  async deleteAllPlayRecords(userName: string): Promise<void> {
+    await this.storage.deleteAllPlayRecords(userName);
   }
 
   // 收藏相关方法
@@ -111,6 +164,7 @@ export class DbManager {
   async getAllFavorites(
     userName: string
   ): Promise<{ [key: string]: Favorite }> {
+    await this.ensureMigrated();
     return this.storage.getAllFavorites(userName);
   }
 
@@ -121,6 +175,10 @@ export class DbManager {
   ): Promise<void> {
     const key = generateStorageKey(source, id);
     await this.storage.deleteFavorite(userName, key);
+  }
+
+  async deleteAllFavorites(userName: string): Promise<void> {
+    await this.storage.deleteAllFavorites(userName);
   }
 
   async isFavorited(

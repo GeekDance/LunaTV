@@ -43,3 +43,14 @@ sitemap-*.xml
 # generated files
 src/lib/runtime.ts
 public/manifest.json
+
+# next-pwa 构建产物
+public/sw.js
+public/sw.js.map
+public/workbox-*.js
+public/workbox-*.js.map
+
+# Cloudflare trial artifacts and secrets
+.open-next/
+.wrangler/
+.dev.vars*

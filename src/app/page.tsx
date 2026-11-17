@@ -72,8 +72,9 @@ function HomeClient() {
       try {
         setLoading(true);
 
-        // 单个接口失败时保留其他模块已成功获取的数据
-        const [moviesResult, tvResult, varietyResult, bangumiResult] =
+        // 并行获取热门电影、热门剧集、热门综艺和番剧日历
+        // 使用 allSettled 避免单个请求失败导致全部数据为空
+        const [moviesRes, tvShowsRes, varietyShowsRes, bangumiRes] =
           await Promise.allSettled([
             getDoubanCategories({
               kind: 'movie',
@@ -85,35 +86,32 @@ function HomeClient() {
             GetBangumiCalendarData(),
           ]);
 
-        if (
-          moviesResult.status === 'fulfilled' &&
-          moviesResult.value.code === 200
-        ) {
-          setHotMovies(moviesResult.value.list);
-        }
-        if (tvResult.status === 'fulfilled' && tvResult.value.code === 200) {
-          setHotTvShows(tvResult.value.list);
-        }
-        if (
-          varietyResult.status === 'fulfilled' &&
-          varietyResult.value.code === 200
-        ) {
-          setHotVarietyShows(varietyResult.value.list);
-        }
-        if (bangumiResult.status === 'fulfilled') {
-          setBangumiCalendarData(bangumiResult.value);
+        if (moviesRes.status === 'fulfilled' && moviesRes.value.code === 200) {
+          setHotMovies(moviesRes.value.list);
+        } else if (moviesRes.status === 'rejected') {
+          console.error('获取热门电影失败:', moviesRes.reason);
         }
 
-        [moviesResult, tvResult, varietyResult, bangumiResult].forEach(
-          (result, index) => {
-            if (result.status === 'rejected') {
-              console.error(
-                `获取${['热门电影', '热门剧集', '热门综艺', '番剧日历'][index]}失败:`,
-                result.reason
-              );
-            }
-          }
-        );
+        if (tvShowsRes.status === 'fulfilled' && tvShowsRes.value.code === 200) {
+          setHotTvShows(tvShowsRes.value.list);
+        } else if (tvShowsRes.status === 'rejected') {
+          console.error('获取热门剧集失败:', tvShowsRes.reason);
+        }
+
+        if (
+          varietyShowsRes.status === 'fulfilled' &&
+          varietyShowsRes.value.code === 200
+        ) {
+          setHotVarietyShows(varietyShowsRes.value.list);
+        } else if (varietyShowsRes.status === 'rejected') {
+          console.error('获取热门综艺失败:', varietyShowsRes.reason);
+        }
+
+        if (bangumiRes.status === 'fulfilled') {
+          setBangumiCalendarData(bangumiRes.value);
+        } else {
+          console.error('获取番剧日历失败:', bangumiRes.reason);
+        }
       } catch (error) {
         console.error('获取推荐数据失败:', error);
       } finally {
@@ -395,12 +393,11 @@ function HomeClient() {
                             from='douban'
                             title={anime.name_cn || anime.name}
                             poster={
-                              anime.images?.large ||
-                              anime.images?.common ||
-                              anime.images?.medium ||
-                              anime.images?.small ||
-                              anime.images?.grid ||
-                              ''
+                              anime.images.large ||
+                              anime.images.common ||
+                              anime.images.medium ||
+                              anime.images.small ||
+                              anime.images.grid
                             }
                             douban_id={anime.id}
                             rate={anime.rating?.score?.toFixed(1) || ''}
