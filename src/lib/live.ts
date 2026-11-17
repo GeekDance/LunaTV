@@ -1,7 +1,6 @@
 /* eslint-disable no-constant-condition */
 
 import { getConfig } from "@/lib/config";
-import { db } from "@/lib/db";
 
 const defaultUA = 'AptvPlayer/1.4.10'
 
@@ -26,25 +25,27 @@ export interface LiveChannels {
 }
 
 const cachedLiveChannels: { [key: string]: LiveChannels } = {};
+const cachedSourceSignatures: { [key: string]: string } = {};
+const sourceSignature = (source: { url: string; ua?: string; epg?: string }) =>
+  JSON.stringify([source.url, source.ua || defaultUA, source.epg || '']);
 
 export function deleteCachedLiveChannels(key: string) {
   delete cachedLiveChannels[key];
+  delete cachedSourceSignatures[key];
 }
 
 export async function getCachedLiveChannels(key: string): Promise<LiveChannels | null> {
-  if (!cachedLiveChannels[key]) {
-    const config = await getConfig();
-    const liveInfo = config.LiveConfig?.find(live => live.key === key);
-    if (!liveInfo) {
-      return null;
-    }
-    const channelNum = await refreshLiveChannels(liveInfo);
-    if (channelNum === 0) {
-      return null;
-    }
-    liveInfo.channelNumber = channelNum;
-    await db.saveAdminConfig(config);
+  const config = await getConfig({ fresh: true });
+  const liveInfo = config.LiveConfig?.find(live => live.key === key && !live.disabled);
+  if (!liveInfo) {
+    deleteCachedLiveChannels(key);
+    return null;
   }
+  if (!cachedLiveChannels[key] || cachedSourceSignatures[key] !== sourceSignature(liveInfo)) {
+    const channelNum = await refreshLiveChannels(liveInfo);
+    if (channelNum === 0) return null;
+  }
+  // Channel reads must never write a stale full admin configuration back to storage.
   return cachedLiveChannels[key] || null;
 }
 
@@ -77,6 +78,7 @@ export async function refreshLiveChannels(liveInfo: {
     epgUrl: epgUrl,
     epgs: epgs,
   };
+  cachedSourceSignatures[liveInfo.key] = sourceSignature(liveInfo);
   return result.channels.length;
 }
 

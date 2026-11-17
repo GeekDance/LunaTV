@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 export async function GET(request: NextRequest) {
   console.log(request.url)
   try {
-    const config = await getConfig();
+    const config = await getConfig({ fresh: true });
 
     if (!config) {
       return NextResponse.json({ error: '配置未找到' }, { status: 404 });

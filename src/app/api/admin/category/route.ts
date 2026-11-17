@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 获取配置与存储
-    const adminConfig = await getConfig();
+    const adminConfig = await getConfig({ fresh: true });
 
     // 权限与身份校验
     if (username !== process.env.USERNAME) {

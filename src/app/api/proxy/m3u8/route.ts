@@ -2,8 +2,8 @@
 
 import { NextResponse } from "next/server";
 
-import { getConfig } from "@/lib/config";
 import { getBaseUrl, resolveUrl } from "@/lib/live";
+import { getLiveSource } from "@/lib/live-source";
 
 export const runtime = 'nodejs';
 
@@ -16,8 +16,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing url' }, { status: 400 });
   }
 
-  const config = await getConfig();
-  const liveSource = config.LiveConfig?.find((s: any) => s.key === source);
+  const liveSource = await getLiveSource(source, searchParams.get('moontv-ua'), searchParams.get('moontv-playback'));
   if (!liveSource) {
     return NextResponse.json({ error: 'Source not found' }, { status: 404 });
   }

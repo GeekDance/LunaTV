@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
     }
 
-    const adminConfig = await getConfig();
+    const adminConfig = await getConfig({ fresh: true });
 
     // 权限校验
     if (username !== process.env.USERNAME) {

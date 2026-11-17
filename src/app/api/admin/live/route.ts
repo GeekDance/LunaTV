@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     // 权限检查
     const authInfo = getAuthInfoFromCookie(request);
     const username = authInfo?.username;
-    const config = await getConfig();
+    const config = await getConfig({ fresh: true });
     if (username !== process.env.USERNAME) {
       // 管理员
       const user = config.UserConfig.Users.find(

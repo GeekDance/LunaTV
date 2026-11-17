@@ -66,6 +66,8 @@ function LivePageClient() {
   // 直播源相关
   const [liveSources, setLiveSources] = useState<LiveSource[]>([]);
   const [currentSource, setCurrentSource] = useState<LiveSource | null>(null);
+  // Cache identity only, not an authentication credential; changes on each page load.
+  const playbackIdRef = useRef(`${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
   const currentSourceRef = useRef<LiveSource | null>(null);
   useEffect(() => {
     currentSourceRef.current = currentSource;
@@ -668,7 +670,7 @@ function LivePageClient() {
             title: currentChannelRef.current.name,
             source_name: currentSourceRef.current.name,
             year: '',
-            cover: `/api/proxy/logo?url=${encodeURIComponent(currentChannelRef.current.logo)}&source=${currentSourceRef.current.key}`,
+            cover: `/api/proxy/logo?url=${encodeURIComponent(currentChannelRef.current.logo)}&source=${currentSourceRef.current.key}&moontv-ua=${encodeURIComponent(currentSourceRef.current.ua || '')}&moontv-playback=${playbackIdRef.current}`,
             total_episodes: 1,
             save_time: Date.now(),
             search_title: '',
@@ -767,6 +769,10 @@ function LivePageClient() {
         try {
           const url = new URL(context.url, window.location.origin);
           url.searchParams.set('moontv-source', currentSourceRef.current?.key || '');
+          if (url.origin === window.location.origin) {
+            url.searchParams.set('moontv-ua', currentSourceRef.current?.ua || '');
+            url.searchParams.set('moontv-playback', playbackIdRef.current);
+          }
           context.url = url.toString();
         } catch (error) {
           // ignore
@@ -868,7 +874,7 @@ function LivePageClient() {
 
       // precheck type
       let type = 'm3u8';
-      const precheckUrl = `/api/live/precheck?url=${encodeURIComponent(videoUrl)}&moontv-source=${currentSourceRef.current?.key || ''}`;
+      const precheckUrl = `/api/live/precheck?url=${encodeURIComponent(videoUrl)}&moontv-source=${currentSourceRef.current?.key || ''}&moontv-ua=${encodeURIComponent(currentSourceRef.current?.ua || '')}&moontv-playback=${playbackIdRef.current}`;
       const precheckResponse = await fetch(precheckUrl);
       if (!precheckResponse.ok) {
         console.error('预检查失败:', precheckResponse.statusText);
@@ -890,7 +896,7 @@ function LivePageClient() {
       setUnsupportedType(null);
 
       const customType = { m3u8: m3u8Loader };
-      const targetUrl = `/api/proxy/m3u8?url=${encodeURIComponent(videoUrl)}&moontv-source=${currentSourceRef.current?.key || ''}`;
+      const targetUrl = `/api/proxy/m3u8?url=${encodeURIComponent(videoUrl)}&moontv-source=${currentSourceRef.current?.key || ''}&moontv-ua=${encodeURIComponent(currentSourceRef.current?.ua || '')}&moontv-playback=${playbackIdRef.current}`;
       try {
         // 创建新的播放器实例
         Artplayer.USE_RAF = false;
@@ -1425,7 +1431,7 @@ function LivePageClient() {
                                 <div className='w-10 h-10 bg-gray-300 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden'>
                                   {channel.logo ? (
                                     <img
-                                      src={`/api/proxy/logo?url=${encodeURIComponent(channel.logo)}&source=${currentSource?.key || ''}`}
+                                      src={`/api/proxy/logo?url=${encodeURIComponent(channel.logo)}&source=${currentSource?.key || ''}&moontv-ua=${encodeURIComponent(currentSource?.ua || '')}&moontv-playback=${playbackIdRef.current}`}
                                       alt={channel.name}
                                       className='w-full h-full rounded object-contain'
                                       loading="lazy"
@@ -1533,7 +1539,7 @@ function LivePageClient() {
                   <div className='w-20 h-20 bg-gray-300 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden'>
                     {currentChannel.logo ? (
                       <img
-                        src={`/api/proxy/logo?url=${encodeURIComponent(currentChannel.logo)}&source=${currentSource?.key || ''}`}
+                        src={`/api/proxy/logo?url=${encodeURIComponent(currentChannel.logo)}&source=${currentSource?.key || ''}&moontv-ua=${encodeURIComponent(currentSource?.ua || '')}&moontv-playback=${playbackIdRef.current}`}
                         alt={currentChannel.name}
                         className='w-full h-full rounded object-contain'
                         loading="lazy"

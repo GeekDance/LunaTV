@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 
-import { getConfig } from '@/lib/config';
+import { getLiveSource } from '@/lib/live-source';
 import { isImageContentType } from '@/lib/proxy-guard';
 
 export const runtime = 'nodejs';
@@ -18,8 +18,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing image URL' }, { status: 400 });
   }
 
-  const config = await getConfig();
-  const liveSource = config.LiveConfig?.find((s: any) => s.key === source);
+  const liveSource = await getLiveSource(source, searchParams.get('moontv-ua'), searchParams.get('moontv-playback'));
   const ua = liveSource?.ua || 'AptvPlayer/1.4.10';
 
   try {

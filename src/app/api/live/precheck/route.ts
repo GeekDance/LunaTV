@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   if (!url) {
     return NextResponse.json({ error: 'Missing url' }, { status: 400 });
   }
-  const config = await getConfig();
+  const config = await getConfig({ fresh: true });
   const liveSource = config.LiveConfig?.find((s: any) => s.key === source);
   if (!liveSource) {
     return NextResponse.json({ error: 'Source not found' }, { status: 404 });

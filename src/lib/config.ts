@@ -61,6 +61,7 @@ let cachedConfigAt = 0;
 // 正在进行中的读取，避免冷启动时并发请求同时打库
 let pendingConfig: Promise<AdminConfig> | null = null;
 const CONFIG_TTL_MS = 5 * 60 * 1000;
+let configReadGeneration = 0;
 
 
 // 从配置文件补充管理员配置
@@ -296,23 +297,25 @@ async function getInitConfig(configFile: string, subConfig: {
   return adminConfig;
 }
 
-export async function getConfig(): Promise<AdminConfig> {
+export async function getConfig({ fresh = false }: { fresh?: boolean } = {}): Promise<AdminConfig> {
   // 命中未过期的内存缓存
-  if (cachedConfig && Date.now() - cachedConfigAt < CONFIG_TTL_MS) {
+  if (!fresh && cachedConfig && Date.now() - cachedConfigAt < CONFIG_TTL_MS) {
     return cachedConfig;
   }
 
   // 已有在途读取则复用，避免并发重复打库
-  if (pendingConfig) {
+  if (!fresh && pendingConfig) {
     return pendingConfig;
   }
 
-  pendingConfig = (async () => {
+  const generation = ++configReadGeneration;
+  const read = (async () => {
     // 读 db
     let adminConfig: AdminConfig | null = null;
     try {
       adminConfig = await db.getAdminConfig();
     } catch (e) {
+      if (fresh) throw e;
       console.error('获取管理员配置失败:', e);
       // 读库失败时回退到旧缓存，避免整站不可用
       if (cachedConfig) {
@@ -327,21 +330,24 @@ export async function getConfig(): Promise<AdminConfig> {
       adminConfig = await getInitConfig("");
     }
     adminConfig = configSelfCheck(adminConfig);
-    cachedConfig = adminConfig;
-    cachedConfigAt = Date.now();
+    if (generation === configReadGeneration) {
+      cachedConfig = adminConfig;
+      cachedConfigAt = Date.now();
+    }
     // 仅在首次初始化时回写，避免每次缓存过期都产生一次写库
     if (needInit) {
       try {
-        await db.saveAdminConfig(cachedConfig);
+        await db.saveAdminConfig(adminConfig);
       } catch (e) {
         console.error('保存管理员配置失败:', e);
       }
     }
-    return cachedConfig;
-  })().finally(() => {
-    pendingConfig = null;
-  });
+    return adminConfig;
+  })();
 
+  // Explicit fresh reads must not join another request's cached/in-flight read.
+  if (fresh) return read;
+  pendingConfig = read.finally(() => { pendingConfig = null; });
   return pendingConfig;
 }
 

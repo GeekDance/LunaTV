@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const config = await getConfig();
+  const config = await getConfig({ fresh: true });
   const apiSites = config.SourceConfig;
 
   // 共享状态
