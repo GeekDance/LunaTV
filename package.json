@@ -21,7 +21,9 @@
     "cf:preview": "opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare deploy",
     "cf:deploy:free": "opennextjs-cloudflare deploy --config wrangler.free.jsonc --profile lunatv-free",
-    "cf:build:free": "NEXT_PUBLIC_STORAGE_TYPE=d1 NEXT_PUBLIC_SITE_NAME=\"LunaTV Workers Test\" opennextjs-cloudflare build --config wrangler.free.jsonc"
+    "cf:build:free": "NEXT_PUBLIC_STORAGE_TYPE=d1 NEXT_PUBLIC_SITE_NAME=\"LunaTV Workers Test\" opennextjs-cloudflare build --config wrangler.free.jsonc",
+    "cf:build:production": "NEXT_PUBLIC_STORAGE_TYPE=upstash NEXT_PUBLIC_SITE_NAME=\"🏓\" USERNAME=admin UPSTASH_URL=https://example.invalid UPSTASH_TOKEN=build-only-placeholder opennextjs-cloudflare build --config wrangler.production.jsonc",
+    "cf:deploy:production": "opennextjs-cloudflare deploy --config wrangler.production.jsonc"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

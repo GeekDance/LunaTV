@@ -1,0 +1,32 @@
+// Original Paid account; no custom domain until validation passes. Secrets are set separately.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lunatv-production",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-13",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    "USERNAME": "admin",
+    "NEXT_PUBLIC_STORAGE_TYPE": "upstash",
+    "NEXT_PUBLIC_SITE_NAME": "🏓",
+    "NEXT_PUBLIC_SEARCH_MAX_PAGE": "1"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "keep_names": false,
+  "account_id": "dae5cd014545c39ce73e20ba9ebc7cb9",
+  "limits": {
+    "cpu_ms": 3000,
+    "subrequests": 1000
+  }
+}

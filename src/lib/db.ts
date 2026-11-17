@@ -56,28 +56,49 @@ export function generateStorageKey(source: string, id: string): string {
 export class DbManager {
   private storage: IStorage;
   private migrationPromise: Promise<void> | null = null;
+  private migrationComplete = false;
+  private requestMigrations = new WeakMap<object, Promise<void>>();
 
   constructor() {
     this.storage = getStorage();
-    // 启动时自动触发数据迁移（异步，不阻塞构造）
-    if (this.storage && typeof this.storage.migrateData === 'function') {
-      this.migrationPromise = this.storage.migrateData().then(async () => {
+  }
+
+  /** 在等待数据的请求内迁移，避免 Worker 复用已结束请求的 Promise。 */
+  private async ensureMigrated(): Promise<void> {
+    if (this.migrationComplete) return;
+    if (!this.storage || typeof this.storage.migrateData !== 'function') {
+      this.migrationComplete = true;
+      return;
+    }
+    let requestContext: object | undefined;
+    try {
+      const { getCloudflareContext } = await import('@opennextjs/cloudflare');
+      requestContext = getCloudflareContext().ctx;
+    } catch {
+      // Other supported runtimes retain their shared in-flight migration.
+    }
+    // Another call may have finished while the runtime module loaded.
+    if (this.migrationComplete) return;
+    let pending = requestContext
+      ? this.requestMigrations.get(requestContext)
+      : this.migrationPromise;
+    if (!pending) {
+      pending = this.storage.migrateData().then(async () => {
         // 数据结构迁移完成后，执行密码哈希迁移
         if (typeof this.storage.migratePasswords === 'function') {
           await this.storage.migratePasswords();
         }
       }).catch((err) => {
         console.error('数据迁移异常:', err);
+      }).finally(() => {
+        this.migrationComplete = true;
+        if (requestContext) this.requestMigrations.delete(requestContext);
+        else this.migrationPromise = null;
       });
+      if (requestContext) this.requestMigrations.set(requestContext, pending);
+      else this.migrationPromise = pending;
     }
-  }
-
-  /** 等待迁移完成（内部方法，首次调用后 migrationPromise 会被置空） */
-  private async ensureMigrated(): Promise<void> {
-    if (this.migrationPromise) {
-      await this.migrationPromise;
-      this.migrationPromise = null;
-    }
+    await pending;
   }
 
   // 播放记录相关方法
