@@ -1,8 +1,11 @@
-import { GetBangumiCalendarData } from '../bangumi.client';
+let GetBangumiCalendarData: typeof import('../bangumi.client').GetBangumiCalendarData;
 
 const valid = { id: 1, name: 'Valid anime', images: { large: '/poster.jpg' } };
 
-beforeEach(() => {
+beforeEach(async () => {
+  jest.resetModules();
+  sessionStorage.clear();
+  ({ GetBangumiCalendarData } = await import('../bangumi.client'));
   global.fetch = jest.fn();
 });
 
@@ -32,4 +35,20 @@ test('rejects malformed calendar responses', async () => {
     json: async () => ({ error: 'unavailable' }),
   });
   await expect(GetBangumiCalendarData()).rejects.toThrow();
+});
+
+test('ignores a persisted calendar with malformed days after a reload', async () => {
+  (fetch as jest.Mock).mockResolvedValue({
+    ok: true,
+    json: async () => [{ weekday: { en: 'Mon' }, items: [valid] }],
+  });
+  await GetBangumiCalendarData();
+  const saved = JSON.parse(sessionStorage.getItem('lunatv:catalog:v1') || '{}');
+  saved['bangumi:calendar'].data = [{}];
+  sessionStorage.setItem('lunatv:catalog:v1', JSON.stringify(saved));
+  jest.resetModules();
+  const reloaded = await import('../bangumi.client');
+  const result = await reloaded.GetBangumiCalendarData();
+  expect(result[0].weekday.en).toBe('Mon');
+  expect(result[0].items[0].id).toBe(1);
 });

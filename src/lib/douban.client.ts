@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any,no-console,no-case-declarations */
 
+import { cachedCatalog } from './catalog-cache';
 import { DoubanItem, DoubanResult } from './types';
 
 interface DoubanCategoriesParams {
@@ -192,7 +193,7 @@ export async function fetchDoubanCategories(
 /**
  * 统一的豆瓣分类数据获取函数，根据代理设置选择使用服务端 API 或客户端代理获取
  */
-export async function getDoubanCategories(
+async function getDoubanCategoriesUncached(
   params: DoubanCategoriesParams
 ): Promise<DoubanResult> {
   const { kind, category, type, pageLimit = 20, pageStart = 0 } = params;
@@ -225,7 +226,7 @@ interface DoubanListParams {
   pageStart?: number;
 }
 
-export async function getDoubanList(
+async function getDoubanListUncached(
   params: DoubanListParams
 ): Promise<DoubanResult> {
   const { tag, type, pageLimit = 20, pageStart = 0 } = params;
@@ -334,7 +335,7 @@ interface DoubanRecommendsParams {
   sort?: string;
 }
 
-export async function getDoubanRecommends(
+async function getDoubanRecommendsUncached(
   params: DoubanRecommendsParams
 ): Promise<DoubanResult> {
   const {
@@ -476,4 +477,29 @@ async function fetchDoubanRecommends(
   } catch (error) {
     throw new Error(`获取豆瓣推荐数据失败: ${(error as Error).message}`);
   }
+}
+
+function isCatalogResult(data: DoubanResult): boolean {
+  return data?.code === 200 && Array.isArray(data.list) && data.list.every(item =>
+    !!item && (typeof item.id === 'string' || typeof item.id === 'number') &&
+    typeof item.title === 'string' && typeof item.poster === 'string'
+  );
+}
+
+export function getDoubanCategories(params: DoubanCategoriesParams): Promise<DoubanResult> {
+  const normalized = { ...params, pageLimit: params.pageLimit ?? 20, pageStart: params.pageStart ?? 0 };
+  const key = JSON.stringify(['getDoubanCategories', getDoubanProxyConfig(), Object.entries(normalized).sort(([a], [b]) => a.localeCompare(b))]);
+  return cachedCatalog(key, () => getDoubanCategoriesUncached(normalized), isCatalogResult);
+}
+
+export function getDoubanList(params: DoubanListParams): Promise<DoubanResult> {
+  const normalized = { ...params, pageLimit: params.pageLimit ?? 20, pageStart: params.pageStart ?? 0 };
+  const key = JSON.stringify(['getDoubanList', getDoubanProxyConfig(), Object.entries(normalized).sort(([a], [b]) => a.localeCompare(b))]);
+  return cachedCatalog(key, () => getDoubanListUncached(normalized), isCatalogResult);
+}
+
+export function getDoubanRecommends(params: DoubanRecommendsParams): Promise<DoubanResult> {
+  const normalized = { ...params, pageLimit: params.pageLimit ?? 20, pageStart: params.pageStart ?? 0 };
+  const key = JSON.stringify(['getDoubanRecommends', getDoubanProxyConfig(), Object.entries(normalized).sort(([a], [b]) => a.localeCompare(b))]);
+  return cachedCatalog(key, () => getDoubanRecommendsUncached(normalized), isCatalogResult);
 }

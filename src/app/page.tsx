@@ -80,20 +80,21 @@ function HomeClient() {
               kind: 'movie',
               category: '热门',
               type: '全部',
+              pageLimit: 25,
             }),
-            getDoubanCategories({ kind: 'tv', category: 'tv', type: 'tv' }),
-            getDoubanCategories({ kind: 'tv', category: 'show', type: 'show' }),
+            getDoubanCategories({ kind: 'tv', category: 'tv', type: 'tv', pageLimit: 25 }),
+            getDoubanCategories({ kind: 'tv', category: 'show', type: 'show', pageLimit: 25 }),
             GetBangumiCalendarData(),
           ]);
 
         if (moviesRes.status === 'fulfilled' && moviesRes.value.code === 200) {
-          setHotMovies(moviesRes.value.list);
+          setHotMovies(moviesRes.value.list.slice(0, 20));
         } else if (moviesRes.status === 'rejected') {
           console.error('获取热门电影失败:', moviesRes.reason);
         }
 
         if (tvShowsRes.status === 'fulfilled' && tvShowsRes.value.code === 200) {
-          setHotTvShows(tvShowsRes.value.list);
+          setHotTvShows(tvShowsRes.value.list.slice(0, 20));
         } else if (tvShowsRes.status === 'rejected') {
           console.error('获取热门剧集失败:', tvShowsRes.reason);
         }
@@ -102,7 +103,7 @@ function HomeClient() {
           varietyShowsRes.status === 'fulfilled' &&
           varietyShowsRes.value.code === 200
         ) {
-          setHotVarietyShows(varietyShowsRes.value.list);
+          setHotVarietyShows(varietyShowsRes.value.list.slice(0, 20));
         } else if (varietyShowsRes.status === 'rejected') {
           console.error('获取热门综艺失败:', varietyShowsRes.reason);
         }
@@ -278,6 +279,7 @@ function HomeClient() {
                           from='douban'
                           title={movie.title}
                           poster={movie.poster}
+                          priority={index < 6}
                           douban_id={Number(movie.id)}
                           rate={movie.rate}
                           year={movie.year}

@@ -1,5 +1,7 @@
 'use client';
 
+import { cachedCatalog } from './catalog-cache';
+
 export interface BangumiCalendarData {
   weekday: {
     en: string;
@@ -22,7 +24,7 @@ export interface BangumiCalendarData {
   }[];
 }
 
-export async function GetBangumiCalendarData(): Promise<BangumiCalendarData[]> {
+async function fetchBangumiCalendarData(): Promise<BangumiCalendarData[]> {
   const response = await fetch('/api/bangumi/calendar');
   if (!response.ok) {
     throw new Error(`获取番剧日历失败: HTTP ${response.status}`);
@@ -34,4 +36,14 @@ export async function GetBangumiCalendarData(): Promise<BangumiCalendarData[]> {
   }));
 
   return filteredData;
+}
+
+export function GetBangumiCalendarData(): Promise<BangumiCalendarData[]> {
+  return cachedCatalog('bangumi:calendar', fetchBangumiCalendarData, data => Array.isArray(data) && data.every(day =>
+    typeof day?.weekday?.en === 'string' && Array.isArray(day.items) &&
+    day.items.every(item => !!item && typeof item.id === 'number' &&
+      (typeof item.name === 'string' || typeof item.name_cn === 'string') &&
+      !!item.images && Object.values(item.images).some(url => typeof url === 'string' && !!url)
+    )
+  ));
 }

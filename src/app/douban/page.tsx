@@ -24,7 +24,7 @@ import VirtualGrid from '@/components/VirtualGrid';
 function DoubanPageClient() {
   const searchParams = useSearchParams();
   const [doubanData, setDoubanData] = useState<DoubanItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -772,6 +772,7 @@ function DoubanPageClient() {
                     from='douban'
                     title={item.title}
                     poster={item.poster}
+                    priority={index < 6}
                     douban_id={Number(item.id)}
                     rate={item.rate}
                     year={item.year}

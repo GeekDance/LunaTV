@@ -81,6 +81,13 @@ export default async function RootLayout({
     enableWebLive = config.SiteConfig.EnableWebLive ?? false;
   }
 
+  // Start TLS connections to the configured public catalog/image CDNs before hydration.
+  const catalogOrigins = new Set<string>();
+  if (doubanProxyType === 'cmliussss-cdn-tencent') catalogOrigins.add('https://m.douban.cmliussss.net');
+  if (doubanProxyType === 'cmliussss-cdn-ali') catalogOrigins.add('https://m.douban.cmliussss.com');
+  if (doubanImageProxyType === 'cmliussss-cdn-tencent') catalogOrigins.add('https://img.doubanio.cmliussss.net');
+  if (doubanImageProxyType === 'cmliussss-cdn-ali') catalogOrigins.add('https://img.doubanio.cmliussss.com');
+
   // 将运行时配置注入到全局 window 对象，供客户端在运行时读取
   const runtimeConfig = {
     STORAGE_TYPE: process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage',
@@ -97,6 +104,7 @@ export default async function RootLayout({
   return (
     <html lang='zh-CN' suppressHydrationWarning>
       <head>
+        {Array.from(catalogOrigins).map(origin => <link key={origin} rel='preconnect' href={origin} crossOrigin='anonymous' />)}
         <meta
           name='viewport'
           content='width=device-width, initial-scale=1.0, viewport-fit=cover'

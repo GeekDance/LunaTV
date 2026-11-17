@@ -33,6 +33,7 @@ export interface VideoCardProps {
   title?: string;
   query?: string;
   poster?: string;
+  priority?: boolean;
   episodes?: number;
   source_name?: string;
   source_names?: string[];
@@ -61,6 +62,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
     title = '',
     query = '',
     poster = '',
+    priority = false,
     episodes,
     source,
     source_name,
@@ -552,7 +554,8 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
             fill
             className={origin === 'live' ? 'object-contain' : 'object-cover'}
             referrerPolicy='no-referrer'
-            loading='lazy'
+            loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : 'auto'}
             onLoadingComplete={() => setIsLoading(true)}
             onError={(e) => {
               // 图片加载失败时的重试机制
