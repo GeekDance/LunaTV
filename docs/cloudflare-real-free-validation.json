@@ -28,9 +28,9 @@
     "rows_read_24h": 5,
     "rows_written_24h": 13
   },
-  "validation_status": "core functionality and full-scale search passed on real Free; CPU peak risk remains; user selected existing Paid plan for production",
-  "pending": "Prepare independent production deployment on original Paid account preserving original data, validate before domain cutover. Keep Free test deployment.",
-  "domain_migrated": false,
+  "validation_status": "Free core and full-source tests passed with documented CPU risk; user-selected Paid production and original-hostname validation completed",
+  "pending": "Free test retained. Production uses existing shared Paid account and original Upstash data; original hostname routing and core checks passed. See cloudflare-production-validation.json.",
+  "domain_migrated": true,
   "tls_check": {
     "attempt": 1,
     "hostname": "lunatv-free-test.icedcap-lunatv-free-test.workers.dev",

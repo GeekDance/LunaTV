@@ -1,0 +1,64 @@
+{
+  "date_local": "2026-11-17",
+  "upstream_commit": "6c0428d1ae7a8322efa8031909ec77cac22fd866",
+  "worker": "lunatv-production",
+  "plan": "existing shared Workers Paid account",
+  "independent_url": "https://lunatv-production.doushuqi0409.workers.dev",
+  "latest_deployment": "1d784cea-7980-42d7-94b8-dba6e907929b",
+  "storage": "existing Upstash database",
+  "automated_checks": {
+    "jest": 39,
+    "typecheck": "passed",
+    "changed_file_lint": "passed",
+    "fresh_production_build": "passed"
+  },
+  "independent_checks": {
+    "original_owner_login": "passed",
+    "home_cards": 70,
+    "existing_source_rows": 118,
+    "existing_account_rows": 2,
+    "original_history_cards_observed": 45,
+    "actual_mainstream_playback_seconds_observed": 17.6,
+    "resumed_play_time_seconds": 60,
+    "favorite_after_reload": "passed; test addition restored to original unfavorited state",
+    "browser_client_exception": false
+  },
+  "cold_parallel_navigation_check": {
+    "started_epoch_ms": 1794877688830,
+    "new_deployment_before_check": true,
+    "two_pages_opened_in_parallel": true,
+    "one_page_navigated_away": true,
+    "remaining_page_history_cards": 46,
+    "remaining_page_home_cards": 70,
+    "console_errors": 0,
+    "note": "Cloud test proves normal overlapping navigation and retained data availability. Tail is sampled and does not identify which request owned every promise. Separate regression proves an abandoned first context cannot block a second context."
+  },
+  "backup": {
+    "encrypted_local_application_export": "saved before domain cutover using existing owner password",
+    "important_limit": "Upstream schema/password upgrade had already occurred before this backup; not a pre-migration snapshot. Vercel/DNS-only rollback cannot restore old schema or plaintext passwords."
+  },
+  "domain": {
+    "hostname": "tv.hh7788.xyz",
+    "worker_route": "tv.hh7788.xyz/*",
+    "original_cname_retained": true,
+    "tls_verified": true,
+    "tls_version": "TLSv1.2",
+    "certificate_expiry": "Dec 27 11:59:12 2026 GMT",
+    "status": "passed: original hostname routed to production Worker",
+    "version_observed": "100.1.3",
+    "owner_relogin": "passed",
+    "home_cards": 70,
+    "history_cards": 46,
+    "search_counter": "118/118",
+    "video_resumed_from_seconds": 60,
+    "video_observed_at_seconds": 92.9,
+    "actual_playback_advance_seconds": 32.7,
+    "browser_console_errors": 0,
+    "client_side_exception": false,
+    "geographic_access": "Owner explicitly approved hostname-only exceptions to both existing geographic restrictions. Other hosts remain protected.",
+    "route_managed_in_dashboard": true,
+    "proxied": true
+  },
+  "free_test_retained": true,
+  "goal_complete": true
+}

@@ -1,6 +1,6 @@
 # Cloudflare Workers 独立测试版
 
-本分支基于 MoonTechLab/LunaTV `6c0428d1ae7a8322efa8031909ec77cac22fd866`（100.1.3），使用 OpenNext 将 Next.js 升至 15.5.29，增加 D1 存储适配。正式域名及原站数据库没有迁移。
+本分支基于 MoonTechLab/LunaTV `6c0428d1ae7a8322efa8031909ec77cac22fd866`（100.1.3），使用 OpenNext 将 Next.js 升至 15.5.29，增加 D1 存储适配。正式域名已通过 Cloudflare 路由接入原付费账户的正式 Worker，原 Upstash 数据库继续使用。
 
 ## 已部署环境
 
@@ -27,7 +27,7 @@ pnpm cf:deploy:free
 
 资源验收仍有边界：抽样成功请求的 CPU 峰值达 552 毫秒，超过免费标称 10 毫秒。官方说明存在 CPU 结转机制，不能以当前未中断证明长期稳定。118 源三页搜索需要 354 次页面调用，另有配置与其他请求，会消耗账号每日 10 万次额度。用户已选择正式站共用原 Paid 套餐，保留此独立 Free 测试站。
 
-测试库已恢复为单个公开演示源、最大一页，收藏与进度保留，首页 70 个条目和继续观看复验通过。正式域名尚未切换；后续在原账户准备正式部署并核验原站数据。[真实免费测试记录](docs/cloudflare-real-free-validation.json)。
+测试库已恢复为单个公开演示源、最大一页，收藏与进度保留，首页 70 个条目和继续观看复验通过。正式域名已完成路由切换与验证，原 Upstash 数据继续使用，免费测试站独立保留。[真实免费测试记录](docs/cloudflare-real-free-validation.json)。
 
 ### 原 Paid 对照环境
 
@@ -73,3 +73,9 @@ pnpm typecheck
 ```
 
 不要提交 `.dev.vars`、授权文件、Cookie 或包含请求凭证的完整日志。
+
+## 正式部署结果（2026-11-17）
+
+https://tv.hh7788.xyz 已接入原付费账户的 `lunatv-production`。保留原 CNAME，启用代理并用精确路由 `tv.hh7788.xyz/*` 接入。路由在 Cloudflare 仪表板管理；当前部署配置不声明 routes，不会覆盖该路由。39 项回归通过，原域名重新登录、70 个首页条目、118 源搜索完成、真实视频播放和进度恢复均验证通过，浏览器控制台未发现异常。
+
+注意：最新上游已自动升级原数据库结构及密码存储，已保存加密升级后备份。恢复旧 Vercel 解析本身不能恢复旧数据库结构；备份需要用升级后的应用恢复。详见 [正式部署验证](docs/cloudflare-production-validation.json)与[恢复边界](docs/cloudflare-production-rollout.md)。

@@ -1,25 +1,32 @@
-# LunaTV production rollout
+# LunaTV production deployment and recovery
 
-User decision (2026-11-17): use the existing Paid account for production; keep the independently verified Free account/test URL. Original database remains Upstash. Never publish credentials or raw tail logs.
+Production: https://tv.hh7788.xyz — LunaTV100.1.3, based on upstream6c0428d1ae7a8322efa8031909ec77cac22fd866. The owner selected the existing shared Workers Paid plan for production and retained the independently verified Workers Free test.
 
-- Production Worker: `lunatv-production` in original account `dae5cd014545c39ce73e20ba9ebc7cb9`.
-- Independent address: https://lunatv-production.doushuqi0409.workers.dev
-- Config: `wrangler.production.jsonc`, Upstash runtime secrets set through Cloudflare dashboard; owner remains admin.
-- Build placeholders are nonsecret and are not found in built server assets. Runtime values come from Cloudflare encrypted settings.
-- CPU ceiling 3000ms and external subrequest ceiling1000 are scoped to this Worker. Free test configuration is separate.
-- Keep Vercel project/deployment and original database available for rollback. Never delete original DNS/deployment/data as cleanup.
+## Deployment
 
-## Gate before cutover
+- Worker: `lunatv-production`, independent URL https://lunatv-production.doushuqi0409.workers.dev.
+- Configuration: `wrangler.production.jsonc`; CPU ceiling3000ms and external subrequest ceiling1000 affect only this Worker.
+- Storage: original Upstash database; owner username remains admin. Runtime credentials are encrypted Cloudflare settings and are never committed. Build placeholders are nonsecret and absent from built server assets.
+- Build: `pnpm cf:build:production`. Deploy: `pnpm cf:deploy:production`, using the original account's authorization.
+- Keep the existing CNAME `tv.hh7788.xyz → cfcc90e3d33b05de.vercel-dns-017.com`, TTLauto, proxied=true. Exact route `tv.hh7788.xyz/*` invokes this Worker. The route is managed in the Cloudflare dashboard; routes are omitted from the deployment config and the installed Wrangler leaves existing routes untouched in this case.
+- The owner explicitly approved hostname-only exceptions to the existing geographic restrictions. Those rules remain enabled for other hostnames. App authentication and other protections remain enabled.
 
-1. Fix observed request-lifetime error: DbManager started a migration at module initialization and retained its Promise beyond that request. Start it inside the awaited data read, clear settled Promise, retain completion state, and keep Worker in-flight state in a WeakMap keyed by its request context. Test construction/no-I/O and concurrent/subsequent reads.
-2. Complete unit suite/typecheck/lint/build, then validate independent production URL: original login, 70 home cards, original source count/config, record/favorite availability and search/playback.
-3. Snapshot original DNS record and compare original data UI with new UI. Bind only tv.hh7788.xyz to this Worker after gate passes; no root-zone/account migration and no other project changes.
-4. Validate HTTPS and core flows at original hostname. On failure restore original record/route and retain independent test deployment for investigation.
+## Validation
 
-Current code version deployed independently: ff8460ce-4f24-4308-9eb8-9e121ee96f2e. Full suite31/31, typecheck/lint/fresh build passed. Original login,70 home cards,118 source rows,2 account rows,45 historical record cards, real mainstream playback17+sec, progress resume60sec and favorite persistence passed. Test favorite was restored. Domain cutover verification is in progress.
+39 regression tests, typecheck, lint and a fresh OpenNext production build passed. The original main branch's homepage regression tests are retained; resolving its conflicts preserved the exact runtime files already validated in production.
 
-Original configuration observed on independent production URL:118 source rows and2 user rows. After first lifecycle fix,45 continuing-watch cards are readable and sampled records/favorites requests return200 without errors. A protected encrypted application backup was downloaded to the owner’s local Downloads folder before cutover, encrypted with the existing site owner password. Raw content/credentials are not part of the repository.
+Original-hostname checks passed:100.1.3, owner logout/relogin,70 home recommendation cards,46 continue-watching cards,118-source search completion, real playback advancing60→92.9seconds, saved progress, and no client exception/console errors. Independent-address checks also verified118 existing source rows,2 account rows and favorite persistence after refresh; the test favorite was restored. Standard TLS certificate verification passed.
 
-Review gate: production reviewer requested canceled/overlapping cold-request coverage and database recoverability. Added request-context isolation regression: a never-completing first request does not block a second context (RED→GREEN). Backup retained. Original public CNAME before cutover: cfcc90e3d33b05de.vercel-dns-017.com. Current routing remains unchanged.
+Fresh-deployment parallel pages with one navigation away retained working record/favorite APIs and home modules. A separate regression proves that an abandoned migration in one Worker request cannot block another request context. Request-scoped in-flight state avoids retaining promises owned by ended requests. Raw tail logs, request headers, credentials and personal viewing records are not published.
 
-Important rollback limitation: the upstream constructor in the initial production build ran automatic schema/password migrations against the shared database before the protected backup was exported. Existing data is readable in the new version, but Vercel/DNS-only rollback cannot restore the old schema or recover original plaintext user passwords. The encrypted backup is for recovery with the upgraded application; do not claim it is a pre-migration snapshot. The user was informed before domain cutover.
+Evidence: [production checks](cloudflare-production-validation.json), [real Free checks and limits](cloudflare-real-free-validation.json).
+
+## Data recovery boundary
+
+The upstream constructor in the initial production build automatically upgraded the shared database's legacy keys and password storage before an encrypted application backup was exported. Existing data is readable in the upgraded application. The owner was informed before hostname cutover.
+
+An encrypted post-upgrade application export is retained locally in Downloads, protected by the existing site owner password. It is a recovery backup for the upgraded application, not a pre-migration snapshot. Vercel/DNS-only rollback cannot restore the old schema or recover original plaintext user passwords. Preserve this backup, the original Vercel project, database and deployment; do not delete them as cleanup.
+
+If a release fails, prefer reverting the Worker to the last verified version against this compatible database. Reverting DNS-only status stops Worker routing, but the legacy Vercel application may not understand the upgraded database. Restore application data only with a compatible upgraded version and a verified backup.
+
+Verified deployment: `1d784cea-7980-42d7-94b8-dba6e907929b`.
