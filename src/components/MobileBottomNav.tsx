@@ -3,9 +3,10 @@
 'use client';
 
 import { Cat, Clover, Film, Home, Radio, Star, Tv } from 'lucide-react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
+import CategoryLink from './CategoryLink';
 
 interface MobileBottomNavProps {
   /**
@@ -96,7 +97,7 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
               className='flex-shrink-0'
               style={{ width: '20vw', minWidth: '20vw' }}
             >
-              <Link
+              <CategoryLink
                 href={item.href}
                 className='flex flex-col items-center justify-center w-full h-14 gap-1 text-xs'
               >
@@ -115,7 +116,7 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
                 >
                   {item.label}
                 </span>
-              </Link>
+              </CategoryLink>
             </li>
           );
         })}

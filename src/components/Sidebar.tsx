@@ -14,6 +14,7 @@ import {
   useState,
 } from 'react';
 
+import CategoryLink from './CategoryLink';
 import { useSite } from './SiteProvider';
 
 interface SidebarContextType {
@@ -267,7 +268,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                       decodedActive.includes(`type=${typeMatch}`));
                   const Icon = item.icon;
                   return (
-                    <Link
+                    <CategoryLink
                       key={item.label}
                       href={item.href}
                       onClick={() => setActive(item.href)}
@@ -283,7 +284,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                           {item.label}
                         </span>
                       )}
-                    </Link>
+                    </CategoryLink>
                   );
                 })}
               </div>
