@@ -5,7 +5,7 @@
 import Artplayer from 'artplayer';
 import Hls from 'hls.js';
 import { Heart, Radio, Tv } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 
 import {
@@ -61,7 +61,6 @@ function LivePageClient() {
   const [error, setError] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
-  const router = useRouter();
 
   // 直播源相关
   const [liveSources, setLiveSources] = useState<LiveSource[]>([]);
@@ -269,25 +268,21 @@ function LivePageClient() {
       setLoadingStage('ready');
       setLoadingMessage('✨ 准备就绪...');
 
-      setTimeout(() => {
-        setLoading(false);
-      }, 1000);
+      setLoading(false);
     } catch (err) {
       console.error('获取直播源失败:', err);
       // 不设置错误，而是显示空状态
       setLiveSources([]);
       setLoading(false);
     } finally {
-      // 移除 URL 搜索参数中的 source 和 id
-      const newSearchParams = new URLSearchParams(searchParams.toString());
-      newSearchParams.delete('source');
-      newSearchParams.delete('id');
-
-      const newUrl = newSearchParams.toString()
-        ? `?${newSearchParams.toString()}`
-        : window.location.pathname;
-
-      router.replace(newUrl);
+      // Consume deep links without remounting this page or touching a later destination.
+      const currentUrl = new URL(window.location.href);
+      if (currentUrl.pathname === '/live' &&
+          (currentUrl.searchParams.has('source') || currentUrl.searchParams.has('id'))) {
+        currentUrl.searchParams.delete('source');
+        currentUrl.searchParams.delete('id');
+        window.history.replaceState(null, '', currentUrl.pathname + currentUrl.search + currentUrl.hash);
+      }
     }
   };
 
@@ -394,16 +389,8 @@ function LivePageClient() {
       // 先设置过滤后的频道列表，但不设置选中的分组
       setFilteredChannels(targetGroup ? grouped[targetGroup] : channels);
 
-      // 触发模拟点击分组，让模拟点击来设置分组状态和触发滚动
-      if (targetGroup) {
-        // 确保切换到频道tab
-        setActiveTab('channels');
-
-        // 使用更长的延迟，确保状态更新和DOM渲染完成
-        setTimeout(() => {
-          simulateGroupClick(targetGroup);
-        }, 500); // 增加延迟时间，确保状态更新和DOM渲染完成
-      }
+      setSelectedGroup(targetGroup);
+      if (targetGroup) setActiveTab('channels');
 
       setIsVideoLoading(false);
     } catch (err) {
@@ -520,31 +507,6 @@ function LivePageClient() {
         top: Math.max(0, scrollTop),
         behavior: 'smooth'
       });
-    }
-  };
-
-  // 模拟点击分组的函数
-  const simulateGroupClick = (group: string, retryCount = 0) => {
-    if (!groupContainerRef.current) {
-      if (retryCount < 10) {
-        setTimeout(() => {
-          simulateGroupClick(group, retryCount + 1);
-        }, 200);
-        return;
-      } else {
-        return;
-      }
-    }
-
-    // 直接通过 data-group 属性查找目标按钮
-    const targetButton = groupContainerRef.current.querySelector(`[data-group="${group}"]`) as HTMLButtonElement;
-
-    if (targetButton) {
-      // 手动设置分组状态，确保状态一致性
-      setSelectedGroup(group);
-
-      // 触发点击事件
-      (targetButton as HTMLButtonElement).click();
     }
   };
 
@@ -757,7 +719,7 @@ function LivePageClient() {
         behavior: 'smooth',
       });
     }
-  }, [selectedGroup, groupedChannels]);
+  }, [selectedGroup, groupedChannels, loading]);
 
   class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
     constructor(config: any) {

@@ -26,6 +26,8 @@ export interface LiveChannels {
 
 const cachedLiveChannels: { [key: string]: LiveChannels } = {};
 const cachedSourceSignatures: { [key: string]: string } = {};
+const epgFetchedAt = new WeakMap<LiveChannels, number>();
+const pendingEpg = new WeakMap<LiveChannels, Promise<void>>();
 const sourceSignature = (source: { url: string; ua?: string; epg?: string }) =>
   JSON.stringify([source.url, source.ua || defaultUA, source.epg || '']);
 
@@ -34,7 +36,7 @@ export function deleteCachedLiveChannels(key: string) {
   delete cachedSourceSignatures[key];
 }
 
-export async function getCachedLiveChannels(key: string): Promise<LiveChannels | null> {
+export async function getCachedLiveChannels(key: string, { includeEpg = false }: { includeEpg?: boolean } = {}): Promise<LiveChannels | null> {
   const config = await getConfig({ fresh: true });
   const liveInfo = config.LiveConfig?.find(live => live.key === key && !live.disabled);
   if (!liveInfo) {
@@ -46,7 +48,21 @@ export async function getCachedLiveChannels(key: string): Promise<LiveChannels |
     if (channelNum === 0) return null;
   }
   // Channel reads must never write a stale full admin configuration back to storage.
-  return cachedLiveChannels[key] || null;
+  const cached = cachedLiveChannels[key];
+  const fetchedAt = cached ? epgFetchedAt.get(cached) : undefined;
+  if (cached && includeEpg && (fetchedAt === undefined || Date.now() - fetchedAt >= 5 * 60 * 1000)) {
+    let pending = pendingEpg.get(cached);
+    if (!pending) {
+      pending = parseEpg(cached.epgUrl, liveInfo.ua || defaultUA,
+        cached.channels.map(channel => channel.tvgId).filter(Boolean)).then(epgs => {
+        cached.epgs = epgs;
+        epgFetchedAt.set(cached, Date.now());
+      }).finally(() => pendingEpg.delete(cached));
+      pendingEpg.set(cached, pending);
+    }
+    await pending;
+  }
+  return cached || null;
 }
 
 export async function refreshLiveChannels(liveInfo: {
@@ -71,7 +87,8 @@ export async function refreshLiveChannels(liveInfo: {
   const data = await response.text();
   const result = parseM3U(liveInfo.key, data);
   const epgUrl = liveInfo.epg || result.tvgUrl;
-  const epgs = await parseEpg(epgUrl, liveInfo.ua || defaultUA, result.channels.map(channel => channel.tvgId).filter(tvgId => tvgId));
+  // Program-guide I/O belongs to the EPG request, never the channel-list critical path.
+  const epgs: LiveChannels['epgs'] = {};
   cachedLiveChannels[liveInfo.key] = {
     channelNumber: result.channels.length,
     channels: result.channels,
