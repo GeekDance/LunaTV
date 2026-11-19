@@ -24,7 +24,7 @@ beforeEach(() => {
   Object.assign(window, { RUNTIME_CONFIG: { ENABLE_WEB_LIVE: true } });
   global.fetch = jest.fn(async (url) => ({
     ok: true,
-    json: async () => ({ success: true, data: String(url).includes('/sources') ? [{ key: 'demo', name: 'Test live', url: 'https://example.test/list.m3u' }] : [] }),
+    json: async () => ({ success: true, channelSourceKey: 'demo', channels: [], data: String(url).includes('/sources') ? [{ key: 'demo', name: 'Test live', url: 'https://example.test/list.m3u' }] : [] }),
   })) as jest.Mock;
 });
 afterEach(() => { jest.useRealTimers(); });
@@ -47,4 +47,11 @@ test('cleans consumed deep-link parameters locally while keeping unrelated query
   await act(async () => undefined);
   expect(window.location.pathname + window.location.search + window.location.hash).toBe('/live?keep=1#section');
   expect(mockReplace).not.toHaveBeenCalled();
+});
+
+
+test('reuses channels returned by bootstrap without a second request', async () => {
+  render(<LivePage />);
+  await act(async () => undefined);
+  expect((fetch as jest.Mock).mock.calls.map(([url]) => String(url))).toEqual(['/api/live/sources?includeChannels=1']);
 });

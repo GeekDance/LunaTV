@@ -234,7 +234,9 @@ function LivePageClient() {
       setLoadingMessage('正在获取直播源...');
 
       // 获取 AdminConfig 中的直播源信息
-      const response = await fetch('/api/live/sources');
+      const bootstrapParams = new URLSearchParams({ includeChannels: '1' });
+      if (needLoadSource) bootstrapParams.set('source', needLoadSource);
+      const response = await fetch(`/api/live/sources?${bootstrapParams}`);
       if (!response.ok) {
         throw new Error('获取直播源失败');
       }
@@ -254,14 +256,14 @@ function LivePageClient() {
           const foundSource = sources.find((s: LiveSource) => s.key === needLoadSource);
           if (foundSource) {
             setCurrentSource(foundSource);
-            await fetchChannels(foundSource);
+            await fetchChannels(foundSource, result.channelSourceKey === foundSource.key ? result.channels : undefined);
           } else {
             setCurrentSource(firstSource);
-            await fetchChannels(firstSource);
+            await fetchChannels(firstSource, result.channelSourceKey === firstSource.key ? result.channels : undefined);
           }
         } else {
           setCurrentSource(firstSource);
-          await fetchChannels(firstSource);
+          await fetchChannels(firstSource, result.channelSourceKey === firstSource.key ? result.channels : undefined);
         }
       }
 
@@ -287,22 +289,18 @@ function LivePageClient() {
   };
 
   // 获取频道列表
-  const fetchChannels = async (source: LiveSource) => {
+  const fetchChannels = async (source: LiveSource, initialChannels?: LiveChannel[] | null) => {
     try {
       setIsVideoLoading(true);
 
-      // 从 cachedLiveChannels 获取频道信息
-      const response = await fetch(`/api/live/channels?source=${source.key}`);
-      if (!response.ok) {
-        throw new Error('获取频道列表失败');
+      let channelsData = initialChannels;
+      if (!Array.isArray(channelsData)) {
+        const response = await fetch(`/api/live/channels?source=${source.key}`);
+        if (!response.ok) throw new Error('获取频道列表失败');
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || '获取频道列表失败');
+        channelsData = result.data;
       }
-
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.error || '获取频道列表失败');
-      }
-
-      const channelsData = result.data;
       if (!channelsData || channelsData.length === 0) {
         // 不抛出错误，而是设置空频道列表
         setCurrentChannels([]);

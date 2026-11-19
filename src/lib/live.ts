@@ -1,5 +1,6 @@
 /* eslint-disable no-constant-condition */
 
+import { AdminConfig } from "@/lib/admin.types";
 import { getConfig } from "@/lib/config";
 
 const defaultUA = 'AptvPlayer/1.4.10'
@@ -40,6 +41,16 @@ export async function getCachedLiveChannels(key: string, { includeEpg = false }:
   const config = await getConfig({ fresh: true });
   const liveInfo = config.LiveConfig?.find(live => live.key === key && !live.disabled);
   if (!liveInfo) {
+    deleteCachedLiveChannels(key);
+    return null;
+  }
+  return getLiveChannelsForSource(liveInfo, { includeEpg });
+}
+
+// Accept only server-read source settings, so bootstrap can reuse its fresh snapshot.
+export async function getLiveChannelsForSource(liveInfo: NonNullable<AdminConfig['LiveConfig']>[number], { includeEpg = false }: { includeEpg?: boolean } = {}): Promise<LiveChannels | null> {
+  const key = liveInfo.key;
+  if (liveInfo.disabled) {
     deleteCachedLiveChannels(key);
     return null;
   }
