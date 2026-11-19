@@ -15,6 +15,7 @@ import {
   saveFavorite,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
+import { findRememberedLiveChannel, readLastLiveChannel, rememberLiveChannel } from '@/lib/live-preference.client';
 import { parseCustomTimeFormat } from '@/lib/time';
 
 import EpgScrollableRow from '@/components/EpgScrollableRow';
@@ -81,6 +82,7 @@ function LivePageClient() {
 
   const [needLoadSource] = useState(searchParams.get('source'));
   const [needLoadChannel] = useState(searchParams.get('id'));
+  const [lastLiveChannel] = useState(readLastLiveChannel);
 
   // 播放器相关
   const [videoUrl, setVideoUrl] = useState('');
@@ -235,7 +237,8 @@ function LivePageClient() {
 
       // 获取 AdminConfig 中的直播源信息
       const bootstrapParams = new URLSearchParams({ includeChannels: '1' });
-      if (needLoadSource) bootstrapParams.set('source', needLoadSource);
+      const requestedSource = needLoadSource || (!needLoadChannel ? lastLiveChannel?.sourceKey : null);
+      if (requestedSource) bootstrapParams.set('source', requestedSource);
       const response = await fetch(`/api/live/sources?${bootstrapParams}`);
       if (!response.ok) {
         throw new Error('获取直播源失败');
@@ -250,21 +253,12 @@ function LivePageClient() {
       setLiveSources(sources);
 
       if (sources.length > 0) {
-        // 默认选中第一个源
-        const firstSource = sources[0];
-        if (needLoadSource) {
-          const foundSource = sources.find((s: LiveSource) => s.key === needLoadSource);
-          if (foundSource) {
-            setCurrentSource(foundSource);
-            await fetchChannels(foundSource, result.channelSourceKey === foundSource.key ? result.channels : undefined);
-          } else {
-            setCurrentSource(firstSource);
-            await fetchChannels(firstSource, result.channelSourceKey === firstSource.key ? result.channels : undefined);
-          }
-        } else {
-          setCurrentSource(firstSource);
-          await fetchChannels(firstSource, result.channelSourceKey === firstSource.key ? result.channels : undefined);
-        }
+        const requestedSourceKey = needLoadSource || (!needLoadChannel ? lastLiveChannel?.sourceKey : null);
+        const source = sources.find((s: LiveSource) => s.key === requestedSourceKey) || sources[0];
+        setCurrentSource(source);
+        await fetchChannels(source, result.channelSourceKey === source.key ? result.channels : undefined,
+          needLoadSource || needLoadChannel ? needLoadChannel : undefined);
+
       }
 
       setLoadingStage('ready');
@@ -289,7 +283,7 @@ function LivePageClient() {
   };
 
   // 获取频道列表
-  const fetchChannels = async (source: LiveSource, initialChannels?: LiveChannel[] | null) => {
+  const fetchChannels = async (source: LiveSource, initialChannels?: LiveChannel[] | null, explicitChannelId?: string | null) => {
     try {
       setIsVideoLoading(true);
 
@@ -337,26 +331,13 @@ function LivePageClient() {
         )
       );
 
-      // 默认选中第一个频道
-      if (channels.length > 0) {
-        if (needLoadChannel) {
-          const foundChannel = channels.find((c: LiveChannel) => c.id === needLoadChannel);
-          if (foundChannel) {
-            setCurrentChannel(foundChannel);
-            setVideoUrl(foundChannel.url);
-            // 延迟滚动到选中的频道
-            setTimeout(() => {
-              scrollToChannel(foundChannel);
-            }, 200);
-          } else {
-            setCurrentChannel(channels[0]);
-            setVideoUrl(channels[0].url);
-          }
-        } else {
-          setCurrentChannel(channels[0]);
-          setVideoUrl(channels[0].url);
-        }
-      }
+      // Explicit deep links win; ordinary entry and source changes restore a played channel.
+      const selectedChannel = (explicitChannelId !== undefined
+        ? channels.find(channel => channel.id === explicitChannelId)
+        : findRememberedLiveChannel(source.key, channels)) || channels[0];
+      setCurrentChannel(selectedChannel);
+      setVideoUrl(selectedChannel.url);
+      setTimeout(() => scrollToChannel(selectedChannel), 200);
 
       // 按分组组织频道
       const grouped = channels.reduce((acc, channel) => {
@@ -370,14 +351,7 @@ function LivePageClient() {
 
       setGroupedChannels(grouped);
 
-      // 默认选中当前加载的channel所在的分组，如果没有则选中第一个分组
-      let targetGroup = '';
-      if (needLoadChannel) {
-        const foundChannel = channels.find((c: LiveChannel) => c.id === needLoadChannel);
-        if (foundChannel) {
-          targetGroup = foundChannel.group || '其他';
-        }
-      }
+      let targetGroup = selectedChannel.group || '其他';
 
       // 如果目标分组不存在，则使用第一个分组
       if (!targetGroup || !grouped[targetGroup]) {
@@ -547,6 +521,7 @@ function LivePageClient() {
         }
 
         // 移除所有事件监听器
+        artPlayerRef.current.off('video:playing');
         artPlayerRef.current.off('ready');
         artPlayerRef.current.off('loadstart');
         artPlayerRef.current.off('loadeddata');
@@ -892,6 +867,12 @@ function LivePageClient() {
             loading:
               '<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCIgdmlld0JveD0iMCAwIDUwIDUwIj48cGF0aCBkPSJNMjUuMjUxIDYuNDYxYy0xMC4zMTggMC0xOC42ODMgOC4zNjUtMTguNjgzIDE4LjY4M2g0LjA2OGMwLTguMDcgNi41NDUtMTQuNjE1IDE0LjYxNS0xNC42MTVWNi40NjF6IiBmaWxsPSIjMDA5Njg4Ij48YW5pbWF0ZVRyYW5zZm9ybSBhdHRyaWJ1dGVOYW1lPSJ0cmFuc2Zvcm0iIGF0dHJpYnV0ZVR5cGU9IlhNTCIgZHVyPSIxcyIgZnJvbT0iMCAyNSAyNSIgcmVwZWF0Q291bnQ9ImluZGVmaW5pdGUiIHRvPSIzNjAgMjUgMjUiIHR5cGU9InJvdGF0ZSIvPjwvcGF0aD48L3N2Zz4=">',
           },
+        });
+
+        const player = artPlayerRef.current;
+        const sourceKey = currentSourceRef.current?.key;
+        player.on('video:playing', () => {
+          if (artPlayerRef.current === player && sourceKey) rememberLiveChannel(sourceKey, currentChannel);
         });
 
         // 监听播放器事件
