@@ -796,6 +796,14 @@ function LivePageClient() {
     video.hls = hls;
 
     hls.on(Hls.Events.ERROR, function (event: any, data: any) {
+      const streamType = data.networkDetails?.getResponseHeader?.('X-MoonTV-Stream-Type');
+      if (streamType === 'mp4' || streamType === 'flv') {
+        setUnsupportedType(streamType);
+        setIsVideoLoading(false);
+        hls.destroy();
+        return;
+      }
+
       console.error('HLS Error:', event, data);
 
       if (data.fatal) {
@@ -816,7 +824,7 @@ function LivePageClient() {
 
   // 播放器初始化
   useEffect(() => {
-    const preload = async () => {
+    const preload = () => {
       if (
         !Artplayer ||
         !Hls ||
@@ -827,32 +835,13 @@ function LivePageClient() {
         return;
       }
 
-      console.log('视频URL:', videoUrl);
-
       // 销毁之前的播放器实例并创建新的
       if (artPlayerRef.current) {
         cleanupPlayer();
       }
 
-      // precheck type
-      let type = 'm3u8';
-      const precheckUrl = `/api/live/precheck?url=${encodeURIComponent(videoUrl)}&moontv-source=${currentSourceRef.current?.key || ''}&moontv-ua=${encodeURIComponent(currentSourceRef.current?.ua || '')}&moontv-playback=${playbackIdRef.current}`;
-      const precheckResponse = await fetch(precheckUrl);
-      if (!precheckResponse.ok) {
-        console.error('预检查失败:', precheckResponse.statusText);
-        return;
-      }
-      const precheckResult = await precheckResponse.json();
-      if (precheckResult.success) {
-        type = precheckResult.type;
-      }
-
-      // 如果不是 m3u8 类型，设置不支持的类型并返回
-      if (type !== 'm3u8') {
-        setUnsupportedType(type);
-        setIsVideoLoading(false);
-        return;
-      }
+      // The manifest response also identifies unsupported formats; don't fetch it twice.
+      const type = 'm3u8';
 
       // 重置不支持的类型
       setUnsupportedType(null);

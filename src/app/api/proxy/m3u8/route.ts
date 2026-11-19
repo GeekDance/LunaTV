@@ -41,6 +41,16 @@ export async function GET(request: Request) {
     }
 
     const contentType = response.headers.get('Content-Type') || '';
+    const normalizedType = contentType.toLowerCase();
+    const unsupportedType = normalizedType.includes('video/mp4') ? 'mp4'
+      : normalizedType.includes('video/x-flv') ? 'flv' : null;
+    if (unsupportedType) {
+      return NextResponse.json({ error: 'Unsupported live stream type', type: unsupportedType }, {
+        status: 415,
+        headers: { 'X-MoonTV-Stream-Type': unsupportedType, 'Cache-Control': 'no-store' },
+      });
+    }
+
     // rewrite m3u8
     if (contentType.toLowerCase().includes('mpegurl') || contentType.toLowerCase().includes('octet-stream')) {
       // 获取最终的响应URL（处理重定向后的URL）
