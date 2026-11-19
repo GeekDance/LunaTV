@@ -20,16 +20,35 @@ test('keeps a browser history entry for back navigation without duplicating the 
 });
 
 test.each(['/', '/search', '/live'])(
-  'leaves navigation from %s to the framework',
+  'switches from %s to a category without server navigation',
   (path) => {
     window.history.replaceState(null, '', path);
-    expect(navigateCategoryLocally('/douban?type=show')).toBe(false);
+    expect(navigateCategoryLocally('/douban?type=show')).toBe(true);
+    expect(window.location.pathname + window.location.search).toBe(
+      '/douban?type=show'
+    );
+  }
+);
+
+test.each(['/', '/search?q=demo', '/live'])(
+  'switches from a category to %s within the browsing workspace',
+  (href) => {
+    expect(navigateCategoryLocally(href)).toBe(true);
+    expect(window.location.pathname + window.location.search).toBe(href);
+  }
+);
+
+test.each(['/admin', '/play', '/login'])(
+  'keeps framework navigation when leaving %s',
+  (path) => {
+    window.history.replaceState(null, '', path);
+    expect(navigateCategoryLocally('/douban?type=movie')).toBe(false);
     expect(window.location.pathname).toBe(path);
   }
 );
 
 test.each([
-  '/live',
+  '/admin',
   '/douban?type=unknown',
   'https://example.org/douban?type=tv',
 ])('does not intercept other destinations: %s', (href) => {

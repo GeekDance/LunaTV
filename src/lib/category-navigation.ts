@@ -1,13 +1,16 @@
-/** The category page reads its filters on the client; changing them needs no RSC request. */
+const browsePaths = new Set(['/', '/douban', '/search', '/live']);
+
+/** Mounted browsing views consume pathname/search params directly, without an RSC round-trip. */
 export function navigateCategoryLocally(href: string): boolean {
-  if (window.location.pathname !== '/douban') return false;
+  if (!browsePaths.has(window.location.pathname)) return false;
   const destination = new URL(href, window.location.href);
   if (
     destination.origin !== window.location.origin ||
-    destination.pathname !== '/douban' ||
-    !['movie', 'tv', 'anime', 'show', 'custom'].includes(
-      destination.searchParams.get('type') || ''
-    )
+    !browsePaths.has(destination.pathname) ||
+    (destination.pathname === '/douban' &&
+      !['movie', 'tv', 'anime', 'show', 'custom'].includes(
+        destination.searchParams.get('type') || ''
+      ))
   )
     return false;
 

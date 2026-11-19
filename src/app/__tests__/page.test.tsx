@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { GetBangumiCalendarData } from '@/lib/bangumi.client';
 import { getDoubanCategories } from '@/lib/douban.client';
 
-import Home from '../page';
+import Home from '@/components/pages/HomePage';
 
 jest.mock('@/lib/bangumi.client', () => ({
   GetBangumiCalendarData: jest.fn(),

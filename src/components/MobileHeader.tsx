@@ -1,8 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 
 import { BackButton } from './BackButton';
+import CategoryLink from './CategoryLink';
 import { useSite } from './SiteProvider';
 import { ThemeToggle } from './ThemeToggle';
 import { UserMenu } from './UserMenu';
@@ -18,7 +18,7 @@ const MobileHeader = ({ showBackButton = false }: MobileHeaderProps) => {
       <div className='h-12 flex items-center justify-between px-4'>
         {/* 左侧：搜索按钮、返回按钮和设置按钮 */}
         <div className='flex items-center gap-2'>
-          <Link
+          <CategoryLink
             href='/search'
             className='w-10 h-10 p-2 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/50 dark:text-gray-300 dark:hover:bg-gray-700/50 transition-colors'
           >
@@ -36,7 +36,7 @@ const MobileHeader = ({ showBackButton = false }: MobileHeaderProps) => {
                 d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'
               />
             </svg>
-          </Link>
+          </CategoryLink>
           {showBackButton && <BackButton />}
         </div>
 
@@ -49,12 +49,12 @@ const MobileHeader = ({ showBackButton = false }: MobileHeaderProps) => {
 
       {/* 中间：Logo（绝对居中） */}
       <div className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'>
-        <Link
+        <CategoryLink
           href='/'
           className='text-2xl font-bold text-green-600 tracking-tight hover:opacity-80 transition-opacity'
         >
           {siteName}
-        </Link>
+        </CategoryLink>
       </div>
     </header>
   );

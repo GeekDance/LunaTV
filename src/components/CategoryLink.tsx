@@ -1,9 +1,12 @@
 'use client';
 
 import Link, { useLinkStatus } from 'next/link';
-import { ComponentProps } from 'react';
+import { ComponentProps, useContext } from 'react';
 
+import { preloadBrowseRoute } from '@/lib/browse-preload';
 import { navigateCategoryLocally } from '@/lib/category-navigation';
+
+import { BrowseNavigationContext } from './BrowseNavigationContext';
 
 function PendingIndicator() {
   const { pending } = useLinkStatus();
@@ -24,13 +27,22 @@ export default function CategoryLink({
 }: Omit<ComponentProps<typeof Link>, 'href' | 'onNavigate'> & {
   href: string;
 }) {
+  const workspaceMounted = useContext(BrowseNavigationContext);
   return (
     <Link
       {...props}
       href={href}
-      prefetch
+      prefetch={false}
+      onPointerEnter={(event) => {
+        props.onPointerEnter?.(event);
+        preloadBrowseRoute(href);
+      }}
+      onFocus={(event) => {
+        props.onFocus?.(event);
+        preloadBrowseRoute(href);
+      }}
       onNavigate={(event) => {
-        if (navigateCategoryLocally(href)) {
+        if (workspaceMounted && navigateCategoryLocally(href)) {
           event.preventDefault();
           window.scrollTo(0, 0);
         }
