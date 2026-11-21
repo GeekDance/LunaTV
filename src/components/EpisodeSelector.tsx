@@ -42,6 +42,8 @@ interface EpisodeSelectorProps {
   sourceSearchError?: string | null;
   /** 预计算的测速结果，避免重复测速 */
   precomputedVideoInfo?: Map<string, VideoInfo>;
+  probeEnabled?: boolean;
+  openSourcesRequest?: number;
 }
 
 /**
@@ -61,6 +63,8 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   sourceSearchLoading = false,
   sourceSearchError = null,
   precomputedVideoInfo,
+  probeEnabled = true,
+  openSourcesRequest = 0,
 }) => {
   const router = useRouter();
   const pageCount = Math.ceil(totalEpisodes / episodesPerPage);
@@ -92,6 +96,10 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   const [activeTab, setActiveTab] = useState<'episodes' | 'sources'>(
     totalEpisodes > 1 ? 'episodes' : 'sources'
   );
+
+  useEffect(() => {
+    if (openSourcesRequest > 0) setActiveTab('sources');
+  }, [openSourcesRequest]);
 
   // 当前分页索引（0 开始）
   const initialPage = Math.floor((value - 1) / episodesPerPage);
@@ -182,7 +190,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
   // Progressive search updates replace this pool; obsolete work must not compete with playback.
   useEffect(() => {
-    if (!optimizationEnabled || activeTab !== 'sources' || !availableSources.length) return;
+    if (!probeEnabled || !optimizationEnabled || activeTab !== 'sources' || !availableSources.length) return;
     const controller = new AbortController();
     const inFlight = inFlightProbesRef.current;
     const pendingSources = availableSources.filter(source => !attemptedSourcesRef.current.has(`${source.source}-${source.id}`));
@@ -200,7 +208,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
         if (signal === controller.signal) inFlight.delete(key);
       });
     };
-  }, [activeTab, availableSources, getVideoInfo, optimizationEnabled]);
+  }, [activeTab, availableSources, getVideoInfo, optimizationEnabled, probeEnabled]);
 
   // 升序分页标签
   const categoriesAsc = useMemo(() => {

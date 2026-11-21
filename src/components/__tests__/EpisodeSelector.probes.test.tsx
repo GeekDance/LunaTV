@@ -73,3 +73,38 @@ test('keeps at most four source-card probes during progressive updates and cance
   await act(async () => undefined);
   expect(active).toBe(0);
 });
+
+test('defers card probes until playback is ready and cancels them during recovery', async () => {
+  (getVideoResolutionFromM3u8 as jest.Mock).mockReset();
+  const signals: AbortSignal[] = [];
+  (getVideoResolutionFromM3u8 as jest.Mock).mockImplementation(
+    (_url, signal: AbortSignal) => {
+      signals.push(signal);
+      return new Promise((_resolve, reject) =>
+        signal.addEventListener(
+          'abort',
+          () =>
+            reject(
+              Object.assign(new Error('canceled'), { name: 'AbortError' })
+            ),
+          { once: true }
+        )
+      );
+    }
+  );
+  const props = {
+    totalEpisodes: 1,
+    episodes_titles: ['Episode 1'],
+    availableSources: sources(10),
+  };
+  const view = render(<EpisodeSelector {...props} probeEnabled={false} />);
+  await act(async () => undefined);
+  expect(signals).toHaveLength(0);
+  view.rerender(<EpisodeSelector {...props} probeEnabled />);
+  await act(async () => undefined);
+  expect(signals).toHaveLength(4);
+  view.rerender(<EpisodeSelector {...props} probeEnabled={false} />);
+  await act(async () => undefined);
+  expect(signals.every((signal) => signal.aborted)).toBe(true);
+  view.unmount();
+});
