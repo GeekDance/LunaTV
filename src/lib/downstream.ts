@@ -238,7 +238,12 @@ export async function getDetailFromApi(
   id: string
 ): Promise<SearchResult> {
   if (apiSite.detail) {
-    return handleSpecialSourceDetail(id, apiSite);
+    try {
+      const detail = await handleSpecialSourceDetail(id, apiSite);
+      if (detail.episodes.length > 0) return detail;
+    } catch {
+      // Optional HTML pages can disappear while the source API remains playable.
+    }
   }
 
   const detailUrl = `${apiSite.api}${API_CONFIG.detail.path}${id}`;

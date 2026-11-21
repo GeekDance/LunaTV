@@ -620,9 +620,11 @@ function PlayPageClient() {
       const response = await fetch(`/api/detail?${params}`, { signal: searchController.signal, cache: 'no-store' });
       if (!response.ok) throw new Error('获取视频详情失败');
       const detail = await response.json() as SearchResult;
-      matchingTitle = detail.title || matchingTitle;
-      matchingYear = detail.year || matchingYear;
-      query = searchTitle || detail.title || videoTitle;
+      if (detail.episodes?.some(Boolean)) {
+        matchingTitle = detail.title || matchingTitle;
+        if (detail.year && detail.year !== 'unknown') matchingYear = detail.year;
+        query = searchTitle || detail.title || videoTitle;
+      }
       return detail;
     };
     const fetchSourcesData = async (onResults: (results: SearchResult[]) => void) => {

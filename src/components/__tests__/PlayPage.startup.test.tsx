@@ -96,3 +96,17 @@ test('loads history concurrently and waits for it before starting the requested 
   act(() => canplay());
   expect(player.currentTime).toBe(120);
 });
+
+test('an unusable detail does not overwrite the title and year needed for fallback search', async () => {
+  window.history.replaceState(null, '', '/play?source=selected&id=42&title=Demo&year=2026');
+  global.fetch = jest.fn(async input => {
+    const url = String(input);
+    if (url.startsWith('/api/detail')) return { ok: true, json: async () => ({ source: 'selected', id: '42', title: '', year: 'unknown', episodes: [] }) };
+    if (url === '/api/search/manifest') return { ok: true, json: async () => ({ sources: [{ key: 'fallback', name: 'Fallback' }], maxPages: 1 }) };
+    return { ok: true, json: async () => ({ source: 'fallback', page: 1, pageCount: 1, results: [{ source: 'fallback', id: '7', title: 'Demo', year: '2026', poster: '', episodes: ['https://example.test/fallback.m3u8'], episodes_titles: ['Episode 1'] }] }) };
+  }) as jest.Mock;
+  render(<PlayPage />);
+  await act(async () => undefined);
+  expect(screen.getByText('Episode panel')).toBeInTheDocument();
+  expect((Artplayer as unknown as jest.Mock).mock.calls[0][0].url).toBe('https://example.test/fallback.m3u8');
+});
