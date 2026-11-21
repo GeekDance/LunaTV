@@ -37,7 +37,7 @@ test('compares units numerically, handles missing metrics, and keeps equal resul
     ['gb-gb', info('0.01 GB/s')],
     ['unknown-unknown', info('未知', -1)],
     ['missing-missing', info('NaN MB/s', NaN)],
-    ['tie1-tie1', info('1024 KB/s', 20)],
+    ['tie1-tie1', info('1000 KB/s', 20)],
     ['tie2-tie2', info('1 MB/s', 20)],
   ]);
   expect(sortPlaybackSources(sources, results).map((s) => s.id)).toEqual([
@@ -59,6 +59,42 @@ test('unknown zero latency cannot outrank a measured latency at the same speed',
   ]);
   expect(sortPlaybackSources(sources, results).map((s) => s.id)).toEqual([
     'measured',
+    'unknown',
+  ]);
+});
+
+test('cache data never invents speed priority and unknown rates use first-fragment time', () => {
+  const sources = ['cache', 'slow', 'unknown', 'fast'].map(source);
+  const results = new Map([
+    [
+      'cache-cache',
+      { ...info('999 MB/s'), speedStatus: 'cached' as const, loadTimeMs: 2 },
+    ],
+    [
+      'slow-slow',
+      {
+        ...info('500 KB/s'),
+        speedStatus: 'measured' as const,
+        loadTimeMs: 400,
+      },
+    ],
+    [
+      'unknown-unknown',
+      {
+        ...info('速度不可测'),
+        speedStatus: 'unavailable' as const,
+        loadTimeMs: 100,
+      },
+    ],
+    [
+      'fast-fast',
+      { ...info('1 MiB/s'), speedStatus: 'measured' as const, loadTimeMs: 300 },
+    ],
+  ]);
+  expect(sortPlaybackSources(sources, results).map((s) => s.id)).toEqual([
+    'fast',
+    'slow',
+    'cache',
     'unknown',
   ]);
 });

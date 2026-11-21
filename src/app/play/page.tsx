@@ -275,11 +275,11 @@ function PlayPageClient() {
 
         const value = parseFloat(match[1]);
         const unit = match[2];
-        return unit === 'MB/s' ? value * 1024 : value; // 统一转换为 KB/s
+        return unit === 'MB/s' ? value * 1000 : value; // 统一转换为 KB/s
       })
       .filter((speed) => speed > 0);
 
-    const maxSpeed = validSpeeds.length > 0 ? Math.max(...validSpeeds) : 1024; // 默认1MB/s作为基准
+    const maxSpeed = validSpeeds.length > 0 ? Math.max(...validSpeeds) : 1000; // 默认1MB/s作为基准
 
     // 找出所有有效延迟的最小值和最大值，用于线性映射
     const validPings = successfulResults
@@ -360,7 +360,7 @@ function PlayPageClient() {
 
       const value = parseFloat(match[1]);
       const unit = match[2];
-      const speedKBps = unit === 'MB/s' ? value * 1024 : value;
+      const speedKBps = unit === 'MB/s' ? value * 1000 : value;
 
       // 基于最大速度线性映射，最高100分
       const speedRatio = speedKBps / maxSpeed;

@@ -235,3 +235,47 @@ test('reorders source cards as measurements arrive while pinning the current sou
   expect(all[0].source).toBe('s0');
   view.unmount();
 });
+
+test('cache and unmeasurable sources stay playable without fake bandwidth or ping labels', async () => {
+  const info = new Map([
+    [
+      's0-0',
+      {
+        quality: '1080p',
+        loadSpeed: '缓存命中',
+        pingTime: 0,
+        speedStatus: 'cached' as const,
+        loadTimeMs: 2,
+      },
+    ],
+    [
+      's1-1',
+      {
+        quality: '1080p',
+        loadSpeed: '速度不可测',
+        pingTime: 0,
+        speedStatus: 'unavailable' as const,
+        loadTimeMs: 450,
+      },
+    ],
+  ]);
+  render(
+    <EpisodeSelector
+      totalEpisodes={1}
+      episodes_titles={['Episode 1']}
+      availableSources={sources(2)}
+      precomputedVideoInfo={info}
+      probeEnabled={false}
+    />
+  );
+  await act(async () => undefined);
+  expect(screen.getByText('缓存命中')).toHaveAttribute(
+    'title',
+    expect.stringContaining('不代表网络下载速度')
+  );
+  expect(screen.getByText('速度不可测')).toBeInTheDocument();
+  expect(screen.getByText('首片 2ms')).toBeInTheDocument();
+  expect(screen.getByText('首片 450ms')).toBeInTheDocument();
+  expect(screen.queryByText('检测失败')).not.toBeInTheDocument();
+  expect(screen.queryByText('0ms')).not.toBeInTheDocument();
+});

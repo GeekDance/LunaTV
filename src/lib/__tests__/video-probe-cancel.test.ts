@@ -10,17 +10,19 @@ jest.mock('hls.js', () => ({
 }));
 const mockDestroy = jest.fn();
 const originalFetch = global.fetch;
+const originalTiming = Object.getOwnPropertyDescriptor(
+  performance,
+  'getEntriesByName'
+);
 beforeEach(() => {
   jest.useFakeTimers();
   mockDestroy.mockClear();
-  (Hls as unknown as jest.Mock)
-    .mockClear()
-    .mockImplementation(() => ({
-      destroy: mockDestroy,
-      on: jest.fn(),
-      loadSource: jest.fn(),
-      attachMedia: jest.fn(),
-    }));
+  (Hls as unknown as jest.Mock).mockClear().mockImplementation(() => ({
+    destroy: mockDestroy,
+    on: jest.fn(),
+    loadSource: jest.fn(),
+    attachMedia: jest.fn(),
+  }));
   global.fetch = jest.fn(
     async (_url, init) =>
       new Promise((_resolve, reject) => {
@@ -33,9 +35,15 @@ beforeEach(() => {
 afterEach(() => {
   global.fetch = originalFetch;
   jest.useRealTimers();
+  jest.restoreAllMocks();
+  if (originalTiming)
+    Object.defineProperty(performance, 'getEntriesByName', originalTiming);
+  else
+    delete (performance as unknown as { getEntriesByName?: unknown })
+      .getEntriesByName;
 });
 
-test('aborting a probe destroys HLS, cancels HEAD and clears the timeout', async () => {
+test('aborting a probe destroys HLS and clears the timeout without an extra HEAD request', async () => {
   const controller = new AbortController();
   const result = getVideoResolutionFromM3u8(
     'https://example.test/media.m3u8',
@@ -44,14 +52,123 @@ test('aborting a probe destroys HLS, cancels HEAD and clears the timeout', async
   controller.abort();
   await expect(result).rejects.toMatchObject({ name: 'AbortError' });
   expect(mockDestroy).toHaveBeenCalledTimes(1);
-  expect((fetch as jest.Mock).mock.calls[0][1].signal.aborted).toBe(true);
+  expect(fetch).not.toHaveBeenCalled();
   expect(jest.getTimerCount()).toBe(0);
 });
 
-test('the existing four-second probe timeout also releases the HEAD request', async () => {
+test('the existing four-second probe timeout releases the media probe', async () => {
   const result = getVideoResolutionFromM3u8('https://example.test/media.m3u8');
   jest.advanceTimersByTime(4000);
   await expect(result).rejects.toThrow('Timeout loading video metadata');
   expect(mockDestroy).toHaveBeenCalledTimes(1);
-  expect((fetch as jest.Mock).mock.calls[0][1].signal.aborted).toBe(true);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+test('a cached fragment is labelled as cached instead of reporting gigabytes per second', async () => {
+  jest.spyOn(performance, 'now').mockReturnValue(1000);
+  Object.defineProperty(performance, 'getEntriesByName', {
+    configurable: true,
+    value: jest.fn(() => [
+      {
+        name: 'https://example.test/first.ts',
+        startTime: 1000,
+        requestStart: 1000,
+        responseStart: 1000.1,
+        responseEnd: 1001,
+        transferSize: 0,
+        encodedBodySize: 1000000,
+        decodedBodySize: 1000000,
+        workerStart: 0,
+      },
+    ]),
+  });
+  const result = getVideoResolutionFromM3u8('https://example.test/media.m3u8');
+  const hls = (Hls as unknown as jest.Mock).mock.results[0].value;
+  const video = hls.attachMedia.mock.calls[0][0];
+  Object.defineProperty(video, 'videoWidth', { value: 1920 });
+  const handler = (event: string) =>
+    hls.on.mock.calls.find(([name]: [string]) => name === event)?.[1];
+  handler('loading')?.();
+  (performance.now as jest.Mock).mockReturnValue(1001);
+  video.onloadedmetadata?.(new Event('loadedmetadata'));
+  handler('loaded')('loaded', {
+    frag: {
+      type: 'main',
+      sn: 1,
+      url: 'https://example.test/first.ts',
+      stats: { loading: { start: 1000, first: 1000.1, end: 1001 } },
+    },
+    payload: new ArrayBuffer(1000000),
+  });
+  jest.advanceTimersByTime(0);
+  expect(await result).toMatchObject({
+    loadSpeed: '缓存命中',
+    speedStatus: 'cached',
+  });
+  expect(mockDestroy).toHaveBeenCalledTimes(1);
+});
+
+test('overlapping fragment starts cannot replace the completed fragments own timing', async () => {
+  jest.spyOn(performance, 'now').mockReturnValue(1000);
+  Object.defineProperty(performance, 'getEntriesByName', {
+    configurable: true,
+    value: jest.fn(() => [
+      {
+        name: 'https://example.test/first.ts',
+        startTime: 1000,
+        requestStart: 1001,
+        responseStart: 1100,
+        responseEnd: 1400,
+        transferSize: 1000300,
+        encodedBodySize: 1000000,
+        decodedBodySize: 1000000,
+        workerStart: 0,
+      },
+    ]),
+  });
+  const result = getVideoResolutionFromM3u8('https://example.test/media.m3u8');
+  const hls = (Hls as unknown as jest.Mock).mock.results[0].value;
+  const video = hls.attachMedia.mock.calls[0][0];
+  Object.defineProperty(video, 'videoWidth', { value: 1920 });
+  const handler = (event: string) =>
+    hls.on.mock.calls.find(([name]: [string]) => name === event)?.[1];
+  handler('loading')?.();
+  (performance.now as jest.Mock).mockReturnValue(1399);
+  handler('loading')?.();
+  (performance.now as jest.Mock).mockReturnValue(1400);
+  video.onloadedmetadata?.(new Event('loadedmetadata'));
+  handler('loaded')('loaded', {
+    frag: {
+      type: 'main',
+      sn: 1,
+      url: 'https://example.test/first.ts',
+      stats: { loading: { start: 1000, first: 1100, end: 1400 } },
+    },
+    payload: new ArrayBuffer(1000000),
+  });
+  jest.advanceTimersByTime(0);
+  expect(await result).toMatchObject({
+    loadSpeed: '2.5 MB/s',
+    speedStatus: 'measured',
+    loadTimeMs: 400,
+    pingTime: 100,
+  });
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+test('canceling between fragment completion and measurement clears every timer', async () => {
+  const controller = new AbortController();
+  const result = getVideoResolutionFromM3u8(
+    'https://example.test/media.m3u8',
+    controller.signal
+  );
+  const hls = (Hls as unknown as jest.Mock).mock.results[0].value;
+  hls.on.mock.calls.find(([name]: [string]) => name === 'loaded')[1]('loaded', {
+    frag: { sn: 1, type: 'main' },
+    payload: new ArrayBuffer(100),
+  });
+  controller.abort();
+  await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+  expect(jest.getTimerCount()).toBe(0);
+  expect(mockDestroy).toHaveBeenCalledTimes(1);
 });

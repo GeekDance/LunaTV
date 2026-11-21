@@ -606,11 +606,11 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                                 if (!videoInfo.hasError) {
                                   return (
                                     <div className='flex items-end gap-3 text-xs'>
-                                      <div className='text-green-600 dark:text-green-400 font-medium text-xs'>
+                                      <div title={videoInfo.speedStatus === 'measured' ? '首个有效分片的参考下载速度，不是宽带测速' : videoInfo.speedStatus === 'cached' ? '本地缓存读取不代表网络下载速度' : '无法取得足够、可核验的网络传输数据，不显示推算带宽'} className='text-green-600 dark:text-green-400 font-medium text-xs'>
                                         {videoInfo.loadSpeed}
                                       </div>
                                       <div className='text-orange-600 dark:text-orange-400 font-medium text-xs'>
-                                        {videoInfo.pingTime}ms
+                                        {videoInfo.loadTimeMs !== undefined ? `首片 ${videoInfo.loadTimeMs}ms` : videoInfo.pingTime > 0 ? `响应 ${videoInfo.pingTime}ms` : '耗时未知'}
                                       </div>
                                     </div>
                                   );

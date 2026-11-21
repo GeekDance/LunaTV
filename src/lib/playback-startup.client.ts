@@ -1,9 +1,8 @@
+import type { ProbeNetworkInfo } from './probe-measurement.client';
 import type { SearchResult } from './types';
 
-export interface PlaybackProbe {
+export interface PlaybackProbe extends ProbeNetworkInfo {
   quality: string;
-  loadSpeed: string;
-  pingTime: number;
 }
 export interface ProbedSource {
   source: SearchResult;

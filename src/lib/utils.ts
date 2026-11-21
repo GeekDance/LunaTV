@@ -2,6 +2,8 @@
 import he from 'he';
 import Hls from 'hls.js';
 
+import { matchesProbeResource, measureProbeNetwork, ProbeNetworkInfo } from './probe-measurement.client';
+
 function getDoubanImageProxyConfig(): {
   proxyType:
   | 'server'
@@ -61,185 +63,76 @@ export function processImageUrl(originalUrl: string): string {
 }
 
 /**
- * 从m3u8地址获取视频质量等级和网络信息
+ * 检查视频元数据与首个主媒体分片，只有可核验的非缓存样本才返回参考下载速度。
  * @param m3u8Url m3u8播放列表的URL
- * @returns Promise<{quality: string, loadSpeed: string, pingTime: number}> 视频质量等级和网络信息
+ * @returns 视频质量、测速状态、首片加载耗时及可用时的参考下载速度。
  */
-export async function getVideoResolutionFromM3u8(m3u8Url: string, signal?: AbortSignal): Promise<{
-  quality: string; // 如720p、1080p等
-  loadSpeed: string; // 自动转换为KB/s或MB/s
-  pingTime: number; // 网络延迟（毫秒）
-}> {
+export async function getVideoResolutionFromM3u8(m3u8Url: string, signal?: AbortSignal): Promise<ProbeNetworkInfo & { quality: string }> {
   try {
-    // 直接使用m3u8 URL作为视频源，避免CORS问题
-    return new Promise((resolve, reject) => {
-      if (signal?.aborted) {
-        reject(Object.assign(new Error('Probe canceled'), { name: 'AbortError' }));
-        return;
-      }
-      const headController = new AbortController();
+    return await new Promise((resolve, reject) => {
+      const abortError = () => Object.assign(new Error('Probe canceled'), { name: 'AbortError' });
+      if (signal?.aborted) { reject(abortError()); return; }
       const video = document.createElement('video');
       video.muted = true;
       video.preload = 'metadata';
-
-      // 测量网络延迟（ping时间） - 使用m3u8 URL而不是ts文件
-      const pingStart = performance.now();
-      let pingTime = 0;
-
-      // 测量ping时间（使用m3u8 URL）
-      fetch(m3u8Url, { method: 'HEAD', mode: 'no-cors', signal: headController.signal })
-        .then(() => {
-          pingTime = performance.now() - pingStart;
-        })
-        .catch(() => {
-          pingTime = performance.now() - pingStart; // 记录到失败为止的时间
-        });
-
-      // 固定使用hls.js加载
       const hls = new Hls();
-
-      // 统一的资源释放，重复调用安全
       let released = false;
+      let metadataLoaded = false;
+      let measurement: ProbeNetworkInfo | undefined;
+      let measuring = false;
+      let measurementTimer: ReturnType<typeof setTimeout> | undefined;
       const cleanup = () => {
         if (released) return;
         released = true;
         clearTimeout(timeout);
+        clearTimeout(measurementTimer);
         signal?.removeEventListener('abort', cancelProbe);
-        headController.abort();
         video.onerror = null;
         video.onloadedmetadata = null;
-        try {
-          hls.destroy();
-        } catch (e) {
-          // ignore
-        }
+        try { hls.destroy(); } catch { /* Already released. */ }
         video.remove();
       };
-
-      // 设置超时处理
       const timeout = setTimeout(() => {
-        cleanup();
-        reject(new Error('Timeout loading video metadata'));
+        cleanup(); reject(new Error('Timeout loading video metadata'));
       }, 4000);
-      const cancelProbe = () => {
-        cleanup();
-        reject(Object.assign(new Error('Probe canceled'), { name: 'AbortError' }));
-      };
+      const cancelProbe = () => { cleanup(); reject(abortError()); };
       signal?.addEventListener('abort', cancelProbe, { once: true });
       if (signal?.aborted) { cancelProbe(); return; }
-
-      video.onerror = () => {
-        clearTimeout(timeout);
-        cleanup();
-        reject(new Error('Failed to load video metadata'));
+      const finish = () => {
+        if (released || !metadataLoaded || !measurement) return;
+        const width = video.videoWidth;
+        const quality = !width ? '未知' : width >= 3840 ? '4K' : width >= 2560 ? '2K'
+          : width >= 1920 ? '1080p' : width >= 1280 ? '720p' : width >= 854 ? '480p' : 'SD';
+        cleanup(); resolve({ quality, ...measurement });
       };
-
-      let actualLoadSpeed = '未知';
-      let hasSpeedCalculated = false;
-      let hasMetadataLoaded = false;
-
-      let fragmentStartTime = 0;
-
-      // 检查是否可以返回结果
-      const checkAndResolve = () => {
-        if (
-          hasMetadataLoaded &&
-          (hasSpeedCalculated || actualLoadSpeed !== '未知')
-        ) {
-          clearTimeout(timeout);
-          const width = video.videoWidth;
-          // 无论能否取到尺寸，都必须释放 hls 实例与 video 元素，
-          // 否则测速结束后实例仍会在后台持续拉流，造成内存与带宽泄漏
-          cleanup();
-          if (width && width > 0) {
-            // 根据视频宽度判断视频质量等级，使用经典分辨率的宽度作为分割点
-            const quality =
-              width >= 3840
-                ? '4K' // 4K: 3840x2160
-                : width >= 2560
-                  ? '2K' // 2K: 2560x1440
-                  : width >= 1920
-                    ? '1080p' // 1080p: 1920x1080
-                    : width >= 1280
-                      ? '720p' // 720p: 1280x720
-                      : width >= 854
-                        ? '480p'
-                        : 'SD'; // 480p: 854x480
-
-            resolve({
-              quality,
-              loadSpeed: actualLoadSpeed,
-              pingTime: Math.round(pingTime),
-            });
-          } else {
-            // webkit 无法获取尺寸，直接返回
-            resolve({
-              quality: '未知',
-              loadSpeed: actualLoadSpeed,
-              pingTime: Math.round(pingTime),
-            });
-          }
-        }
-      };
-
-      // 监听片段加载开始
-      hls.on(Hls.Events.FRAG_LOADING, () => {
-        fragmentStartTime = performance.now();
+      video.onerror = () => { cleanup(); reject(new Error('Failed to load video metadata')); };
+      video.onloadedmetadata = () => { metadataLoaded = true; finish(); };
+      hls.on(Hls.Events.ERROR, (_event: any, data: any) => {
+        if (!released && data.fatal) { cleanup(); reject(new Error(`HLS播放失败: ${data.type}`)); }
       });
-
-      // 监听片段加载完成，只需首个分片即可计算速度
-      hls.on(Hls.Events.FRAG_LOADED, (event: any, data: any) => {
-        if (
-          fragmentStartTime > 0 &&
-          data &&
-          data.payload &&
-          !hasSpeedCalculated
-        ) {
-          const loadTime = performance.now() - fragmentStartTime;
-          const size = data.payload.byteLength || 0;
-
-          if (loadTime > 0 && size > 0) {
-            const speedKBps = size / 1024 / (loadTime / 1000);
-
-            // 立即计算速度，无需等待更多分片
-            const avgSpeedKBps = speedKBps;
-
-            if (avgSpeedKBps >= 1024) {
-              actualLoadSpeed = `${(avgSpeedKBps / 1024).toFixed(1)} MB/s`;
-            } else {
-              actualLoadSpeed = `${avgSpeedKBps.toFixed(1)} KB/s`;
-            }
-            hasSpeedCalculated = true;
-            checkAndResolve(); // 尝试返回结果
-          }
-        }
+      hls.on(Hls.Events.FRAG_LOADED, (_event: any, data: any) => {
+        if (released || measuring || !data?.payload?.byteLength || data.frag?.sn === 'initSegment' ||
+          (data.frag?.type && data.frag.type !== 'main')) return;
+        measuring = true;
+        // Wait one task for Resource Timing to publish the completed request.
+        measurementTimer = setTimeout(() => {
+          if (released) return;
+          const stats = data.part?.stats || data.frag?.stats;
+          const names = Array.from(new Set([data.frag?.url, data.networkDetails?.responseURL].filter((url): url is string => typeof url === 'string')));
+          const entries = typeof performance.getEntriesByName === 'function' && stats
+            ? names.flatMap(name => performance.getEntriesByName(name, 'resource') as PerformanceResourceTiming[])
+              .filter(entry => matchesProbeResource(stats, entry)) : [];
+          // Ambiguous parallel requests are not a trustworthy bandwidth sample.
+          measurement = measureProbeNetwork(stats, entries.length === 1 ? entries[0] : undefined);
+          finish();
+        }, 0);
       });
-
       hls.loadSource(m3u8Url);
       hls.attachMedia(video);
-
-      // 监听hls.js错误
-      hls.on(Hls.Events.ERROR, (event: any, data: any) => {
-        console.error('HLS错误:', data);
-        if (data.fatal) {
-          clearTimeout(timeout);
-          cleanup();
-          reject(new Error(`HLS播放失败: ${data.type}`));
-        }
-      });
-
-      // 监听视频元数据加载完成
-      video.onloadedmetadata = () => {
-        hasMetadataLoaded = true;
-        checkAndResolve(); // 尝试返回结果
-      };
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw error;
-    throw new Error(
-      `Error getting video resolution: ${error instanceof Error ? error.message : String(error)
-      }`
-    );
+    throw new Error(`Error getting video resolution: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
