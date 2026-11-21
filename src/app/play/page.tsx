@@ -663,7 +663,7 @@ function PlayPageClient() {
       if (!query.trim()) return [];
       const results = await runBatchedSearch(query.trim(), {
         signal: searchController.signal,
-        onSource: outcome => {
+        onProgress: outcome => {
           if (searchController.signal.aborted) return;
           if (outcome.error) setSourceSearchError('部分来源暂不可用');
           onResults(outcome.results.filter(matches));

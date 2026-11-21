@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8 } from '@/lib/utils';
@@ -107,4 +107,62 @@ test('defers card probes until playback is ready and cancels them during recover
   await act(async () => undefined);
   expect(signals.every((signal) => signal.aborted)).toBe(true);
   view.unmount();
+});
+
+test('shows and selects sources during search, appends later results, and never changes selection on its own', async () => {
+  const first = sources(2);
+  Object.freeze(first);
+  const choose = jest.fn();
+  const props = {
+    totalEpisodes: 1,
+    episodes_titles: ['Episode 1'],
+    probeEnabled: false,
+    sourceSearchLoading: true,
+    currentSource: 's1',
+    currentId: '1',
+    onSourceChange: choose,
+  };
+  const view = render(<EpisodeSelector {...props} availableSources={first} />);
+  expect(screen.getByText('Source 0')).toBeInTheDocument();
+  expect(screen.getByText('Source 1')).toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('继续搜索');
+  fireEvent.click(screen.getByText('Source 0'));
+  expect(choose).toHaveBeenCalledWith('s0', '0', 'Demo');
+  view.rerender(
+    <EpisodeSelector
+      {...props}
+      currentSource='s0'
+      currentId='0'
+      availableSources={sources(3)}
+      sourceSearchError='部分来源暂不可用'
+    />
+  );
+  expect(screen.getByText('Source 2')).toBeInTheDocument();
+  expect(screen.getByText('Source 0')).toBeInTheDocument();
+  expect(choose).toHaveBeenCalledTimes(1);
+  view.rerender(
+    <EpisodeSelector
+      {...props}
+      sourceSearchLoading={false}
+      availableSources={sources(3)}
+    />
+  );
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  expect(screen.getAllByRole('heading', { name: 'Demo' })).toHaveLength(3);
+  view.unmount();
+});
+
+test('does not show an empty state before discovery finishes', () => {
+  const props = {
+    totalEpisodes: 1,
+    episodes_titles: ['Episode 1'],
+    probeEnabled: false,
+  };
+  const view = render(
+    <EpisodeSelector {...props} sourceSearchLoading availableSources={[]} />
+  );
+  expect(screen.queryByText('暂无可用的换源')).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('搜索中');
+  view.rerender(<EpisodeSelector {...props} availableSources={[]} />);
+  expect(screen.getByText('暂无可用的换源')).toBeInTheDocument();
 });

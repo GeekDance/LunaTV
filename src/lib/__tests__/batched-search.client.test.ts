@@ -170,3 +170,31 @@ test('fetches overlapping pages without rendering duplicate source/item keys', a
   expect(f.jobs.map((job) => job.page)).toEqual([1, 2, 3]);
   expect(result.map((row) => row.id)).toEqual(['same']);
 });
+
+test('publishes first-page sources before later pages finish while preserving completion callbacks', async () => {
+  const f = fixture(1, 2);
+  let finish: (() => void) | undefined;
+  const progress: string[][] = [],
+    completed: string[] = [];
+  const fetcher = (async (input, init) => {
+    if (String(input).includes('page=2'))
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    return f.fetcher(input, init);
+  }) as typeof fetch;
+  const running = runBatchedSearch('example', {
+    signal: new NativeAbortController().signal,
+    fetcher,
+    onProgress: (s) => progress.push(s.results.map((r) => r.id)),
+    onSource: (s) => completed.push(s.source),
+  });
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  expect(progress).toEqual([['s0-1']]);
+  expect(completed).toEqual([]);
+  finish?.();
+  await running;
+  expect(progress).toEqual([['s0-1'], ['s0-1', 's0-2']]);
+  expect(completed).toEqual(['s0']);
+  expect(f.maximum()).toBeLessThanOrEqual(4);
+});

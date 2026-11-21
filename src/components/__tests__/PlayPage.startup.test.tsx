@@ -634,3 +634,63 @@ test('an intentional rewind to zero is saved rather than reviving the previous p
     expect.objectContaining({ index: 2, play_time: 0 })
   );
 });
+
+test('later search results do not replace a manually selected source or its resume position', async () => {
+  const { primary, fallback } = crossSourceFixture();
+  const late = series('late');
+  let finishLate: (value: unknown) => void = () => undefined;
+  global.fetch = jest.fn(async (input) => {
+    const url = String(input);
+    if (url.startsWith('/api/detail'))
+      return { ok: true, json: async () => primary };
+    if (url === '/api/search/manifest')
+      return {
+        ok: true,
+        json: async () => ({
+          sources: [
+            { key: 'fallback', name: 'Fallback' },
+            { key: 'late', name: 'Late' },
+          ],
+          maxPages: 1,
+        }),
+      };
+    if (url.includes('source=late'))
+      return new Promise((resolve) => {
+        finishLate = resolve;
+      });
+    return {
+      ok: true,
+      json: async () => ({
+        source: 'fallback',
+        page: 1,
+        pageCount: 1,
+        results: [fallback],
+      }),
+    };
+  }) as jest.Mock;
+  render(<PlayPage />);
+  await act(async () => undefined);
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Select fallback' }))
+  );
+  const player = (Artplayer as unknown as jest.Mock).mock.results[1].value;
+  act(() => canplay(player));
+  expect(player.currentTime).toBe(120);
+  await act(async () =>
+    finishLate({
+      ok: true,
+      json: async () => ({
+        source: 'late',
+        page: 1,
+        pageCount: 1,
+        results: [late],
+      }),
+    })
+  );
+  expect(
+    screen.getByRole('button', { name: 'Select late' })
+  ).toBeInTheDocument();
+  expect(Artplayer).toHaveBeenCalledTimes(2);
+  expect(window.location.search).toContain('source=fallback');
+  expect(player.currentTime).toBe(120);
+});

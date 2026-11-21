@@ -13,6 +13,8 @@ interface Options {
   fetcher?: typeof fetch;
   onStart?: (sources: number) => void;
   onSource?: (outcome: SourceSearchOutcome) => void;
+  /** Cumulative results after every page; onSource still fires once on completion. */
+  onProgress?: (outcome: SourceSearchOutcome) => void;
 }
 
 export async function runBatchedSearch(
@@ -91,6 +93,13 @@ export async function runBatchedSearch(
         checkAbort();
         state.error = error instanceof Error ? error.message : '来源请求失败';
       }
+      checkAbort();
+      options.onProgress?.({
+        source: state.source,
+        sourceName: state.sourceName,
+        results: [...state.results],
+        error: state.error,
+      });
       checkAbort();
       state.nextPage++;
       if (state.nextPage <= state.lastPage) {

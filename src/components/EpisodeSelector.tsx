@@ -474,23 +474,18 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       {activeTab === 'sources' && (
         <div className='flex flex-col h-full mt-4'>
           {sourceSearchLoading && (
-            <div className='flex items-center justify-center py-8'>
-              <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-green-500'></div>
-              <span className='ml-2 text-sm text-gray-600 dark:text-gray-300'>
-                搜索中...
+            <div role='status' aria-live='polite' className='flex shrink-0 items-center justify-center gap-2 py-2 text-sm text-gray-600 dark:text-gray-300'>
+              <div className='animate-spin rounded-full h-4 w-4 border-b-2 border-green-500'></div>
+              <span>
+                {availableSources.length ? `已找到 ${availableSources.length} 个来源，继续搜索…` : '搜索中...'}
               </span>
             </div>
           )}
 
           {sourceSearchError && (
-            <div className='flex items-center justify-center py-8'>
-              <div className='text-center'>
-                <div className='text-red-500 text-2xl mb-2'>⚠️</div>
-                <p className='text-sm text-red-600 dark:text-red-400'>
-                  {sourceSearchError}
-                </p>
-              </div>
-            </div>
+            <p className='shrink-0 rounded-lg bg-amber-500/10 px-3 py-2 mb-2 text-xs text-amber-700 dark:text-amber-300'>
+              {sourceSearchError}
+            </p>
           )}
 
           {!sourceSearchLoading &&
@@ -506,10 +501,10 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
               </div>
             )}
 
-          {!sourceSearchLoading &&
-            availableSources.length > 0 && (
+          {availableSources.length > 0 && (
               <div className='flex-1 overflow-y-auto space-y-2 pb-20'>
                 {availableSources
+                  .slice()
                   .sort((a, b) => {
                     const aIsCurrent =
                       a.source?.toString() === currentSource?.toString() &&
