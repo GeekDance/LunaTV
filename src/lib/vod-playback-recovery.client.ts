@@ -56,44 +56,64 @@ export function createVodFallback(options: {
   onFound: (source: SearchResult, info: PlaybackProbe) => void;
   onExhausted: () => void;
   timeoutMs?: number;
+  allowLateSources?: boolean;
+  onSearching?: () => void;
 }) {
-  const controller = new AbortController();
+  let controller = new AbortController();
   const queue: { source: SearchResult; url: string }[] = [];
   const seenSources = new Set<string>();
   const seenUrls = new Set<string>();
   let active = 0;
   let stopped = false;
+  let expired = false;
   const stop = () => {
     stopped = true;
     clearTimeout(timer);
     controller.abort();
     queue.length = 0;
   };
-  const timer = setTimeout(() => {
+  const expire = () => {
     if (stopped) return;
-    stop();
+    if (!options.allowLateSources) stop();
+    else {
+      expired = true;
+      controller.abort();
+      active = 0;
+      // Unstarted candidates may be offered again in a later progressive batch.
+      for (const entry of queue) {
+        seenSources.delete(
+          JSON.stringify([entry.source.source, entry.source.id])
+        );
+        seenUrls.delete(entry.url);
+      }
+      queue.length = 0;
+    }
     options.onExhausted();
-  }, options.timeoutMs ?? 8000);
+  };
+  let timer = setTimeout(expire, options.timeoutMs ?? 8000);
   const pump = () => {
-    while (!stopped && active < 4 && queue.length) {
+    while (!stopped && !expired && active < 4 && queue.length) {
       const entry = queue.shift();
       if (!entry) break;
       active++;
+      const roundController = controller;
       Promise.resolve()
         .then(() => {
-          if (controller.signal.aborted) throw new Error('Recovery canceled');
-          return options.probe(entry.url, controller.signal);
+          if (roundController.signal.aborted)
+            throw new Error('Recovery canceled');
+          return options.probe(entry.url, roundController.signal);
         })
         .then(
           (info) => {
+            if (controller !== roundController || stopped || expired) return;
             active--;
-            if (stopped) return;
             stop();
             options.onFound(entry.source, info);
           },
           () => {
+            if (controller !== roundController || stopped || expired) return;
             active--;
-            if (!stopped) pump();
+            pump();
           }
         );
     }
@@ -114,6 +134,12 @@ export function createVodFallback(options: {
         seenSources.add(key);
         seenUrls.add(url);
         queue.push({ source, url });
+      }
+      if (expired && queue.length) {
+        expired = false;
+        controller = new AbortController();
+        timer = setTimeout(expire, options.timeoutMs ?? 8000);
+        options.onSearching?.();
       }
       pump();
     },

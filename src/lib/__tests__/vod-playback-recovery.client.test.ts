@@ -137,3 +137,42 @@ test('never starts more than four fallback probes concurrently', async () => {
   expect(probe).toHaveBeenCalledTimes(4);
   pool.cancel();
 });
+
+test('a later discovery gets a fresh bounded probe round without reviving the expired round', async () => {
+  const found = jest.fn(),
+    exhausted = jest.fn(),
+    searching = jest.fn();
+  let oldFinish: (value: typeof info) => void = () => undefined;
+  const pool = createVodFallback({
+    allowLateSources: true,
+    urlFor: (s) => s.episodes[0],
+    allowed: () => true,
+    probe: (url) =>
+      url.includes('late')
+        ? Promise.resolve(info)
+        : new Promise((resolve) => {
+            oldFinish = resolve;
+          }),
+    onFound: found,
+    onExhausted: exhausted,
+    onSearching: searching,
+  });
+  pool.offer([entry('old')]);
+  await flush();
+  jest.advanceTimersByTime(8000);
+  expect(exhausted).toHaveBeenCalledTimes(1);
+  oldFinish(info);
+  await flush();
+  expect(found).not.toHaveBeenCalled();
+  pool.offer([entry('old'), entry('late')]);
+  await flush();
+  expect(searching).toHaveBeenCalledTimes(1);
+  expect(found).toHaveBeenCalledWith(
+    expect.objectContaining({ id: 'late' }),
+    info
+  );
+  pool.cancel();
+  pool.offer([entry('newer')]);
+  await flush();
+  expect(found).toHaveBeenCalledTimes(1);
+});

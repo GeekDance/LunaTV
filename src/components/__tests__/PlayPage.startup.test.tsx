@@ -53,16 +53,14 @@ beforeEach(() => {
     .spyOn(HTMLMediaElement.prototype, 'pause')
     .mockImplementation(() => undefined);
   (getVideoResolutionFromM3u8 as jest.Mock).mockReset();
-  (Hls as unknown as jest.Mock)
-    .mockReset()
-    .mockImplementation(() => ({
-      on: jest.fn(),
-      loadSource: jest.fn(),
-      attachMedia: jest.fn(),
-      destroy: jest.fn(),
-      recoverMediaError: jest.fn(),
-      startLoad: jest.fn(),
-    }));
+  (Hls as unknown as jest.Mock).mockReset().mockImplementation(() => ({
+    on: jest.fn(),
+    loadSource: jest.fn(),
+    attachMedia: jest.fn(),
+    destroy: jest.fn(),
+    recoverMediaError: jest.fn(),
+    startLoad: jest.fn(),
+  }));
   (getAllPlayRecords as jest.Mock).mockReset().mockResolvedValue({});
   (Artplayer as unknown as jest.Mock).mockClear();
   window.history.replaceState(
@@ -303,4 +301,65 @@ test('selecting the current episode does not cancel its failure deadline', async
   });
   expect(screen.queryByText(/视频加载中/)).not.toBeInTheDocument();
   expect(screen.getByRole('alert')).toBeInTheDocument();
+});
+
+test('recovers when a usable source arrives after the first recovery deadline', async () => {
+  const primary = {
+    source: 'selected',
+    id: '42',
+    title: 'Demo',
+    year: '2026',
+    episodes: ['https://example.test/bad.m3u8'],
+    episodes_titles: ['Episode 1'],
+  };
+  const fallback = {
+    ...primary,
+    source: 'late',
+    id: '7',
+    episodes: ['https://example.test/good.m3u8'],
+  };
+  let finishSearch: (value: unknown) => void = () => undefined;
+  global.fetch = jest.fn(async (input) => {
+    const url = String(input);
+    if (url.startsWith('/api/detail'))
+      return { ok: true, json: async () => primary };
+    if (url === '/api/search/manifest')
+      return {
+        ok: true,
+        json: async () => ({
+          sources: [{ key: 'late', name: 'Late' }],
+          maxPages: 1,
+        }),
+      };
+    return new Promise((resolve) => {
+      finishSearch = resolve;
+    });
+  }) as jest.Mock;
+  (getVideoResolutionFromM3u8 as jest.Mock).mockResolvedValue({
+    quality: '1080p',
+    loadSpeed: '2 MB/s',
+    pingTime: 10,
+  });
+  render(<PlayPage />);
+  await act(async () => undefined);
+  await act(async () => {
+    jest.advanceTimersByTime(12000);
+  });
+  await act(async () => {
+    jest.advanceTimersByTime(8000);
+  });
+  expect(screen.getByRole('alert')).toHaveTextContent('暂未找到');
+  await act(async () =>
+    finishSearch({
+      ok: true,
+      json: async () => ({
+        source: 'late',
+        page: 1,
+        pageCount: 1,
+        results: [fallback],
+      }),
+    })
+  );
+  const player = (Artplayer as unknown as jest.Mock).mock.results[0].value;
+  expect(player.switch).toBe('https://example.test/good.m3u8');
 });

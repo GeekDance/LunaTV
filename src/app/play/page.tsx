@@ -728,7 +728,7 @@ function PlayPageClient() {
       newUrl.searchParams.set('source', detailData.source);
       newUrl.searchParams.set('id', detailData.id);
       newUrl.searchParams.set('year', detailData.year);
-      newUrl.searchParams.set('title', detailData.title);
+      newUrl.searchParams.set('title', detailData.title || videoTitleRef.current);
       newUrl.searchParams.delete('prefer');
       window.history.replaceState({}, '', newUrl.toString());
 
@@ -1566,15 +1566,21 @@ function PlayPageClient() {
           setPlaybackIssue('自动换源仍未成功，请选择其他来源或重新尝试。');
           return;
         }
-        recoveryCountRef.current++;
         setPlaybackIssue('当前播放源未能加载。');
         setRecoveringPlayback(true);
         pool = createVodFallback({
+          allowLateSources: true,
+          onSearching: () => {
+            if (!active || playbackSessionRef.current !== session) return;
+            setRecoveringPlayback(true);
+            setPlaybackIssue('正在检测新找到的播放源。');
+          },
           urlFor: source => source.episodes[currentEpisodeIndex] || source.episodes[0],
           allowed: (source, url) => !failedSourcesRef.current.has(JSON.stringify([source.source, source.id])) && !failedStreamsRef.current.has(url),
           probe: getVideoResolutionFromM3u8,
           onFound: (source, info) => {
             if (!active || playbackSessionRef.current !== session) return;
+            recoveryCountRef.current++;
             setPrecomputedVideoInfo(prev => new Map(prev).set(`${source.source}-${source.id}`, info));
             applyPlaybackSource(source);
             void saveSkipConfig(source.source, source.id, skipConfigRef.current).catch(() => undefined);
