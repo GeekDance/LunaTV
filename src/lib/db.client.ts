@@ -503,7 +503,9 @@ export function generateStorageKey(source: string, id: string): string {
  * 非本地存储模式下使用混合缓存策略：优先返回缓存数据，后台异步同步最新数据。
  * 在服务端渲染阶段 (window === undefined) 时返回空对象，避免报错。
  */
-export async function getAllPlayRecords(): Promise<Record<string, PlayRecord>> {
+export async function getAllPlayRecords(
+  options: { fresh?: boolean } = {}
+): Promise<Record<string, PlayRecord>> {
   // 服务器端渲染阶段直接返回空，交由客户端 useEffect 再行请求
   if (typeof window === 'undefined') {
     return {};
@@ -514,7 +516,7 @@ export async function getAllPlayRecords(): Promise<Record<string, PlayRecord>> {
     // 优先从缓存获取数据
     const cachedData = cacheManager.getCachedPlayRecords();
 
-    if (cachedData) {
+    if (cachedData && !options.fresh) {
       // 返回缓存数据，同时后台异步更新
       fetchFromApi<Record<string, PlayRecord>>(`/api/playrecords`)
         .then((freshData) => {
@@ -546,7 +548,7 @@ export async function getAllPlayRecords(): Promise<Record<string, PlayRecord>> {
       } catch (err) {
         console.error('获取播放记录失败:', err);
         triggerGlobalError('获取播放记录失败');
-        return {};
+        return cachedData || {};
       }
     }
   }

@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import Artplayer from 'artplayer';
 import Hls from 'hls.js';
 
-import { getAllPlayRecords } from '@/lib/db.client';
+import { getAllPlayRecords, savePlayRecord } from '@/lib/db.client';
 import { getVideoResolutionFromM3u8 } from '@/lib/utils';
 
 import PlayPage from '@/app/play/page';
@@ -22,6 +22,7 @@ jest.mock('hls.js', () => ({
 jest.mock('artplayer', () => ({ __esModule: true, default: jest.fn() }));
 jest.mock('@/lib/db.client', () => ({
   getAllPlayRecords: jest.fn(),
+  savePlayRecord: jest.fn().mockResolvedValue(undefined),
   saveSkipConfig: jest.fn().mockResolvedValue(undefined),
   deleteSkipConfig: jest.fn().mockResolvedValue(undefined),
   deletePlayRecord: jest.fn().mockResolvedValue(undefined),
@@ -40,9 +41,25 @@ jest.mock('@/components/PageLayout', () => ({
 }));
 jest.mock('@/components/EpisodeSelector', () => ({
   __esModule: true,
-  default: ({ onChange }: { onChange: (index: number) => void }) => (
+  default: ({
+    onChange,
+    onSourceChange,
+    availableSources = [],
+  }: {
+    onChange: (index: number) => void;
+    onSourceChange: (source: string, id: string) => void;
+    availableSources?: { source: string; id: string }[];
+  }) => (
     <div>
       Episode panel<button onClick={() => onChange(0)}>Current episode</button>
+      {availableSources.map((source) => (
+        <button
+          key={source.source}
+          onClick={() => onSourceChange(source.source, source.id)}
+        >
+          Select {source.source}
+        </button>
+      ))}
     </div>
   ),
 }));
@@ -362,4 +379,258 @@ test('recovers when a usable source arrives after the first recovery deadline', 
   );
   const player = (Artplayer as unknown as jest.Mock).mock.results[0].value;
   expect(player.switch).toBe('https://example.test/good.m3u8');
+});
+
+const series = (source: string, count = 3) => ({
+  source,
+  source_name: source,
+  id: source === 'selected' ? '42' : '7',
+  title: 'Demo',
+  year: '2026',
+  poster: '',
+  episodes: Array.from(
+    { length: count },
+    (_, i) => `https://example.test/${source}-${i}.m3u8`
+  ),
+  episodes_titles: Array.from({ length: count }, (_, i) => `Episode ${i + 1}`),
+});
+function crossSourceFixture() {
+  const primary = series('selected'),
+    fallback = series('fallback');
+  global.fetch = jest.fn(async (input) => {
+    const url = String(input);
+    if (url.startsWith('/api/detail'))
+      return { ok: true, json: async () => primary };
+    if (url === '/api/search/manifest')
+      return {
+        ok: true,
+        json: async () => ({
+          sources: [{ key: 'fallback', name: 'Fallback' }],
+          maxPages: 1,
+        }),
+      };
+    return {
+      ok: true,
+      json: async () => ({
+        source: 'fallback',
+        page: 1,
+        pageCount: 1,
+        results: [fallback],
+      }),
+    };
+  }) as jest.Mock;
+  (getAllPlayRecords as jest.Mock).mockResolvedValue({
+    'selected+42': {
+      title: 'Demo',
+      year: '2026',
+      index: 2,
+      play_time: 120,
+      save_time: 1,
+    },
+  });
+  (getVideoResolutionFromM3u8 as jest.Mock).mockResolvedValue({
+    quality: '1080p',
+    loadSpeed: '2 MB/s',
+    pingTime: 10,
+  });
+  return { primary, fallback };
+}
+function canplay(player: {
+  duration: number;
+  currentTime: number;
+  on: jest.Mock;
+}) {
+  player.duration = 1000;
+  player.on.mock.calls.find(
+    ([event]: [string]) => event === 'video:canplay'
+  )[1]();
+}
+
+test('initial auto selection preserves the requested sources saved episode and time', async () => {
+  crossSourceFixture();
+  window.history.replaceState(
+    null,
+    '',
+    '/play?source=selected&id=42&title=Demo&year=2026&prefer=true'
+  );
+  render(<PlayPage />);
+  await act(async () => undefined);
+  const options = (Artplayer as unknown as jest.Mock).mock.calls[0][0];
+  expect(options.url).toBe('https://example.test/fallback-1.m3u8');
+  const player = (Artplayer as unknown as jest.Mock).mock.results[0].value;
+  act(() => canplay(player));
+  expect(player.currentTime).toBe(120);
+});
+
+test('manual switch before the first seek keeps the pending episode and time', async () => {
+  crossSourceFixture();
+  render(<PlayPage />);
+  await act(async () => undefined);
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Select fallback' }))
+  );
+  expect((Artplayer as unknown as jest.Mock).mock.calls[1][0].url).toBe(
+    'https://example.test/fallback-1.m3u8'
+  );
+  const player = (Artplayer as unknown as jest.Mock).mock.results[1].value;
+  act(() => canplay(player));
+  expect(player.currentTime).toBe(120);
+});
+
+test('fatal HLS teardown cannot erase the live position used by automatic fallback', async () => {
+  crossSourceFixture();
+  render(<PlayPage />);
+  await act(async () => undefined);
+  const player = (Artplayer as unknown as jest.Mock).mock.results[0].value;
+  act(() => canplay(player));
+  player.currentTime = 135;
+  const options = (Artplayer as unknown as jest.Mock).mock.calls[0][0];
+  act(() => options.customType.m3u8(player.video, options.url));
+  const hls = (Hls as unknown as jest.Mock).mock.results[0].value;
+  hls.destroy.mockImplementation(() => {
+    player.currentTime = 0;
+  });
+  await act(async () =>
+    hls.on.mock.calls.find(([event]: [string]) => event === 'error')[1](
+      'error',
+      { fatal: true, type: 'networkError' }
+    )
+  );
+  expect(player.switch).toBe('https://example.test/fallback-1.m3u8');
+  act(() => canplay(player));
+  expect(player.currentTime).toBe(135);
+});
+
+test('manual source change preserves live progress and saves it on the destination', async () => {
+  crossSourceFixture();
+  render(<PlayPage />);
+  await act(async () => undefined);
+  const original = (Artplayer as unknown as jest.Mock).mock.results[0].value;
+  act(() => canplay(original));
+  original.currentTime = 165;
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Select fallback' }))
+  );
+  const replacement = (Artplayer as unknown as jest.Mock).mock.results[1].value;
+  act(() => canplay(replacement));
+  expect(replacement.currentTime).toBe(165);
+  await act(async () =>
+    replacement.on.mock.calls.find(
+      ([event]: [string]) => event === 'pause'
+    )[1]()
+  );
+  expect(savePlayRecord).toHaveBeenCalledWith(
+    'fallback',
+    '7',
+    expect.objectContaining({ index: 2, play_time: 165 })
+  );
+});
+
+test('switching to a source missing the current episode keeps the existing selection', async () => {
+  const { fallback } = crossSourceFixture();
+  fallback.episodes.splice(1);
+  render(<PlayPage />);
+  await act(async () => undefined);
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Select fallback' }))
+  );
+  expect(Artplayer).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('status')).toHaveTextContent('暂无第 2 集');
+  expect(window.location.search).toContain('source=selected');
+});
+
+test('a deliberate episode change resets pending progress instead of applying the previous episode time', async () => {
+  crossSourceFixture();
+  render(<PlayPage />);
+  await act(async () => undefined);
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Current episode' }))
+  );
+  const player = (Artplayer as unknown as jest.Mock).mock.results[0].value;
+  expect(player.switch).toBe('https://example.test/selected-0.m3u8');
+  act(() => canplay(player));
+  expect(player.currentTime).toBe(0);
+});
+
+test('a failed seek remains pending for the next source rather than being cleared', async () => {
+  crossSourceFixture();
+  render(<PlayPage />);
+  await act(async () => undefined);
+  const player = (Artplayer as unknown as jest.Mock).mock.results[0].value;
+  Object.defineProperty(player, 'currentTime', {
+    configurable: true,
+    get: () => 0,
+    set: () => {
+      throw new Error('not seekable yet');
+    },
+  });
+  act(() => canplay(player));
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Select fallback' }))
+  );
+  const replacement = (Artplayer as unknown as jest.Mock).mock.results[1].value;
+  act(() => canplay(replacement));
+  expect(replacement.currentTime).toBe(120);
+});
+
+test('waits for a later complete source when the first source lacks the saved episode', async () => {
+  const { primary, fallback } = crossSourceFixture();
+  primary.episodes.splice(1);
+  let finish: (value: unknown) => void = () => undefined;
+  global.fetch = jest.fn(async (input) => {
+    const url = String(input);
+    if (url.startsWith('/api/detail'))
+      return { ok: true, json: async () => primary };
+    if (url === '/api/search/manifest')
+      return {
+        ok: true,
+        json: async () => ({
+          sources: [{ key: 'fallback', name: 'Fallback' }],
+          maxPages: 1,
+        }),
+      };
+    return new Promise((resolve) => {
+      finish = resolve;
+    });
+  }) as jest.Mock;
+  render(<PlayPage />);
+  await act(async () => undefined);
+  expect(screen.queryByText('加载失败')).not.toBeInTheDocument();
+  expect(Artplayer).not.toHaveBeenCalled();
+  await act(async () =>
+    finish({
+      ok: true,
+      json: async () => ({
+        source: 'fallback',
+        page: 1,
+        pageCount: 1,
+        results: [fallback],
+      }),
+    })
+  );
+  expect((Artplayer as unknown as jest.Mock).mock.calls[0][0].url).toBe(
+    'https://example.test/fallback-1.m3u8'
+  );
+  const player = (Artplayer as unknown as jest.Mock).mock.results[0].value;
+  act(() => canplay(player));
+  expect(player.currentTime).toBe(120);
+});
+
+test('an intentional rewind to zero is saved rather than reviving the previous position', async () => {
+  crossSourceFixture();
+  render(<PlayPage />);
+  await act(async () => undefined);
+  const player = (Artplayer as unknown as jest.Mock).mock.results[0].value;
+  act(() => canplay(player));
+  player.currentTime = 0;
+  await act(async () =>
+    player.on.mock.calls.find(
+      ([event]: [string]) => event === 'video:seeked'
+    )[1]()
+  );
+  expect(savePlayRecord).toHaveBeenLastCalledWith(
+    'selected',
+    '42',
+    expect.objectContaining({ index: 2, play_time: 0 })
+  );
 });

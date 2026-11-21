@@ -21,6 +21,7 @@ import {
   saveSkipConfig,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
+import { capturePosition, PlaybackPosition, resolveResumePosition } from '@/lib/playback-position.client';
 import { ProbedSource, startPlayback } from '@/lib/playback-startup.client';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
@@ -156,6 +157,15 @@ function PlayPageClient() {
 
   // 用于记录是否需要在播放器 ready 后跳转到指定进度
   const resumeTimeRef = useRef<number | null>(null);
+  const playbackPositionRef = useRef<PlaybackPosition>({ episodeIndex: 0, time: 0 });
+  const [sourceChangeNotice, setSourceChangeNotice] = useState<string | null>(null);
+  const queueCurrentPosition = () => {
+    const position = capturePosition(playbackPositionRef.current, resumeTimeRef.current,
+      artPlayerRef.current?.currentTime, currentEpisodeIndexRef.current);
+    playbackPositionRef.current = position;
+    resumeTimeRef.current = position.time;
+    return position;
+  };
   // 上次使用的音量，默认 0.7
   const lastVolumeRef = useRef<number>(0.7);
   // 上次使用的播放速率，默认 1.0
@@ -626,12 +636,13 @@ function PlayPageClient() {
   // 进入页面时直接获取全部源信息
   useEffect(() => {
     const searchController = new AbortController();
-    const historyPromise: ReturnType<typeof getAllPlayRecords> = currentSource && currentId
-      ? getAllPlayRecords().catch(() => ({}))
-      : Promise.resolve({});
+    const historyPromise = getAllPlayRecords({ fresh: true }).catch(() => ({}));
     let matchingTitle = videoTitle;
     let matchingYear = videoYear;
     let query = searchTitle || videoTitle;
+    let searchFinished = false;
+    let requiredEpisode: number | null = null;
+    let notifyCompatible: ((source?: SearchResult) => void) | null = null;
     const matches = (result: SearchResult) =>
       result.title.replaceAll(' ', '').toLowerCase() === matchingTitle.replaceAll(' ', '').toLowerCase() &&
       (!matchingYear || result.year.toLowerCase() === matchingYear.toLowerCase()) &&
@@ -686,8 +697,19 @@ function PlayPageClient() {
           optimize: optimizationEnabled,
           probe: (source, signal) => getVideoResolutionFromM3u8(source.episodes[currentEpisodeIndex] || source.episodes[0], signal),
           choose: chooseBestSource,
-          onSources: setAvailableSources,
-          onSearchLoading: setSourceSearchLoading,
+          onSources: sources => {
+            availableSourcesRef.current = sources;
+            setAvailableSources(sources);
+            if (requiredEpisode !== null) {
+              const compatible = sources.find(source => source.episodes[requiredEpisode as number]);
+              if (compatible) notifyCompatible?.(compatible);
+            }
+          },
+          onSearchLoading: searching => {
+            setSourceSearchLoading(searching);
+            searchFinished = !searching;
+            if (!searching) notifyCompatible?.();
+          },
           onSearchError: err => setSourceSearchError(err instanceof Error ? err.message : '搜索失败'),
           onPreferring: () => {
             setLoadingStage('preferring');
@@ -700,15 +722,47 @@ function PlayPageClient() {
         setLoading(false);
         return;
       }
-      const records: Awaited<ReturnType<typeof getAllPlayRecords>> = detailData.source === currentSource && detailData.id === currentId ? await historyPromise : {};
+      const records = await historyPromise;
       if (searchController.signal.aborted) return;
-      if (detailData.source === currentSource && detailData.id === currentId) {
-        const record = records[generateStorageKey(currentSource, currentId)];
-        if (record) {
-          const index = Number(record.index) - 1;
-          setCurrentEpisodeIndex(Number.isInteger(index) && index >= 0 && index < detailData.episodes.length ? index : 0);
-          resumeTimeRef.current = Number.isFinite(record.play_time) && record.play_time > 0 ? record.play_time : 0;
+      const position = resolveResumePosition(records, {
+        source: currentSource || detailData.source,
+        id: currentId || detailData.id,
+        title: detailData.title || videoTitle,
+        year: detailData.year && detailData.year !== 'unknown' ? detailData.year : videoYear,
+      });
+      if (position) {
+        if (!detailData.episodes[position.episodeIndex]) {
+          let compatible = availableSourcesRef.current.find(source => source.episodes[position.episodeIndex]);
+          if (!compatible && !searchFinished) {
+            requiredEpisode = position.episodeIndex;
+            setLoadingStage('searching');
+            setLoadingMessage(`正在查找可续播第 ${position.episodeIndex + 1} 集的来源...`);
+            compatible = await new Promise<SearchResult | undefined>(resolve => {
+              const finish = (source?: SearchResult) => {
+                clearTimeout(timer);
+                searchController.signal.removeEventListener('abort', abort);
+                notifyCompatible = null;
+                resolve(source);
+              };
+              const abort = () => finish();
+              const timer = setTimeout(finish, 30000);
+              notifyCompatible = finish;
+              searchController.signal.addEventListener('abort', abort, { once: true });
+            });
+            requiredEpisode = null;
+          }
+          if (searchController.signal.aborted) return;
+          if (!compatible) {
+            setError(`该来源暂无上次观看的第 ${position.episodeIndex + 1} 集，请返回搜索选择其他来源。`);
+            setLoading(false);
+            return;
+          }
+          detailData = compatible;
         }
+        playbackPositionRef.current = position;
+        currentEpisodeIndexRef.current = position.episodeIndex;
+        setCurrentEpisodeIndex(position.episodeIndex);
+        resumeTimeRef.current = position.time;
       }
 
       setNeedPrefer(false);
@@ -719,9 +773,6 @@ function PlayPageClient() {
       setVideoCover(detailData.poster);
       setVideoDoubanId(detailData.douban_id || 0);
       setDetail(detailData);
-      if (currentEpisodeIndex >= detailData.episodes.length) {
-        setCurrentEpisodeIndex(0);
-      }
 
       // 规范URL参数
       const newUrl = new URL(window.location.href);
@@ -763,11 +814,11 @@ function PlayPageClient() {
 
   // Apply selection before storage housekeeping; slow storage must not trap the loading UI.
   const applyPlaybackSource = (newDetail: SearchResult) => {
-    const oldIndex = currentEpisodeIndexRef.current;
-    const targetIndex = oldIndex < newDetail.episodes.length ? oldIndex : 0;
-    const playTime = artPlayerRef.current?.currentTime || 0;
-    if (targetIndex !== oldIndex) resumeTimeRef.current = 0;
-    else if (playTime > 1) resumeTimeRef.current = playTime;
+    const targetIndex = currentEpisodeIndexRef.current;
+    if (!newDetail.episodes[targetIndex]) return;
+    void saveCurrentPlayProgress();
+    queueCurrentPosition();
+    setSourceChangeNotice(null);
     const url = new URL(window.location.href);
     url.searchParams.set('source', newDetail.source);
     url.searchParams.set('id', newDetail.id);
@@ -802,8 +853,8 @@ function PlayPageClient() {
   };
 
   const retryPlayback = () => {
-    const playTime = artPlayerRef.current?.currentTime || 0;
-    if (playTime > 1) resumeTimeRef.current = playTime;
+    void saveCurrentPlayProgress();
+    queueCurrentPosition();
     recoveryCountRef.current = 0;
     failedSourcesRef.current.clear();
     failedStreamsRef.current.clear();
@@ -817,6 +868,10 @@ function PlayPageClient() {
   const handleSourceChange = (newSource: string, newId: string) => {
     const newDetail = availableSourcesRef.current.find(source => source.source === newSource && source.id === newId);
     if (!newDetail?.episodes?.length) return;
+    if (!newDetail.episodes[currentEpisodeIndexRef.current]) {
+      setSourceChangeNotice(`该来源暂无第 ${currentEpisodeIndexRef.current + 1} 集，已保留当前播放位置。`);
+      return;
+    }
     if (newSource === currentSourceRef.current && newId === currentIdRef.current) {
       retryPlayback();
       return;
@@ -848,12 +903,13 @@ function PlayPageClient() {
     if (episodeNumber >= 0 && episodeNumber < totalEpisodes) {
       if (episodeNumber === currentEpisodeIndexRef.current) return;
       // 在更换集数前保存当前播放进度
-      if (artPlayerRef.current && artPlayerRef.current.paused) {
+      if (artPlayerRef.current) {
         saveCurrentPlayProgress();
       }
       resetPlaybackRecovery();
       setIsVideoLoading(true);
       resumeTimeRef.current = 0;
+      playbackPositionRef.current = { episodeIndex: episodeNumber, time: 0 };
       setCurrentEpisodeIndex(episodeNumber);
     }
   };
@@ -868,6 +924,7 @@ function PlayPageClient() {
       resetPlaybackRecovery();
       setIsVideoLoading(true);
       resumeTimeRef.current = 0;
+      playbackPositionRef.current = { episodeIndex: idx - 1, time: 0 };
       setCurrentEpisodeIndex(idx - 1);
     }
   };
@@ -882,6 +939,7 @@ function PlayPageClient() {
       resetPlaybackRecovery();
       setIsVideoLoading(true);
       resumeTimeRef.current = 0;
+      playbackPositionRef.current = { episodeIndex: idx + 1, time: 0 };
       setCurrentEpisodeIndex(idx + 1);
     }
   };
@@ -980,8 +1038,9 @@ function PlayPageClient() {
   // 播放记录相关
   // ---------------------------------------------------------------------------
   // 保存播放进度
-  const saveCurrentPlayProgress = async () => {
+  const saveCurrentPlayProgress = async (allowZero = false) => {
     if (
+      resumeTimeRef.current !== null ||
       !artPlayerRef.current ||
       !currentSourceRef.current ||
       !currentIdRef.current ||
@@ -995,8 +1054,8 @@ function PlayPageClient() {
     const currentTime = player.currentTime || 0;
     const duration = player.duration || 0;
 
-    // 如果播放时间太短（少于5秒）或者视频时长无效，不保存
-    if (currentTime < 1 || !duration) {
+    // Loading zeros cannot replace history; explicit seeks/episode starts may save zero.
+    if (!Number.isFinite(currentTime) || currentTime < 0 || (!allowZero && currentTime < 1) || !duration) {
       return;
     }
 
@@ -1264,9 +1323,13 @@ function PlayPageClient() {
             hls.on(Hls.Events.ERROR, function (_event: any, data: any) {
               if (!data.fatal || video.hls !== hls) return;
               if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRecoveries++ === 0) {
+                void saveCurrentPlayProgress();
+                queueCurrentPosition();
                 hls.recoverMediaError();
                 return;
               }
+              void saveCurrentPlayProgress();
+              queueCurrentPosition();
               hls.destroy();
               const active = playbackWatchRef.current;
               if (active?.url === url) active.guard.fail();
@@ -1287,7 +1350,7 @@ function PlayPageClient() {
               try {
                 localStorage.setItem('enable_blockad', String(newVal));
                 if (artPlayerRef.current) {
-                  resumeTimeRef.current = artPlayerRef.current.currentTime;
+                  queueCurrentPosition();
                   if (
                     artPlayerRef.current.video &&
                     artPlayerRef.current.video.hls
@@ -1422,7 +1485,7 @@ function PlayPageClient() {
       // 监听视频可播放事件，这时恢复播放进度更可靠
       artPlayerRef.current.on('video:canplay', () => {
         // 若存在需要恢复的播放进度，则跳转
-        if (resumeTimeRef.current && resumeTimeRef.current > 0) {
+        if (resumeTimeRef.current !== null) {
           try {
             const duration = artPlayerRef.current.duration || 0;
             let target = resumeTimeRef.current;
@@ -1430,12 +1493,15 @@ function PlayPageClient() {
               target = Math.max(0, duration - 5);
             }
             artPlayerRef.current.currentTime = target;
-            console.log('成功恢复播放进度到:', resumeTimeRef.current);
+            playbackPositionRef.current = { episodeIndex: currentEpisodeIndexRef.current, time: target };
+            console.log('成功恢复播放进度到:', target);
           } catch (err) {
             console.warn('恢复播放进度失败:', err);
+            return;
           }
         }
         resumeTimeRef.current = null;
+        void saveCurrentPlayProgress(true);
 
         setTimeout(() => {
           if (
@@ -1511,7 +1577,19 @@ function PlayPageClient() {
         handleNextEpisode();
       });
 
+      const trackPosition = () => {
+        if (resumeTimeRef.current !== null) return;
+        const time = artPlayerRef.current?.currentTime;
+        if (Number.isFinite(time) && time >= 0) {
+          playbackPositionRef.current = { episodeIndex: currentEpisodeIndexRef.current, time };
+        }
+      };
+      artPlayerRef.current.on('video:seeked', () => {
+        trackPosition();
+        void saveCurrentPlayProgress(true);
+      });
       artPlayerRef.current.on('video:timeupdate', () => {
+        trackPosition();
         const now = Date.now();
         let interval = 5000;
         if (process.env.NEXT_PUBLIC_STORAGE_TYPE === 'upstash') {
@@ -1553,6 +1631,8 @@ function PlayPageClient() {
       },
       onFailure: () => {
         if (!active || playbackSessionRef.current !== session) return;
+        void saveCurrentPlayProgress();
+        queueCurrentPosition();
         video.hls?.destroy();
         video.hls = null;
         video.pause();
@@ -1575,7 +1655,7 @@ function PlayPageClient() {
             setRecoveringPlayback(true);
             setPlaybackIssue('正在检测新找到的播放源。');
           },
-          urlFor: source => source.episodes[currentEpisodeIndex] || source.episodes[0],
+          urlFor: source => source.episodes[currentEpisodeIndex],
           allowed: (source, url) => !failedSourcesRef.current.has(JSON.stringify([source.source, source.id])) && !failedStreamsRef.current.has(url),
           probe: getVideoResolutionFromM3u8,
           onFound: (source, info) => {
@@ -1862,6 +1942,8 @@ function PlayPageClient() {
                     </div>
                   </div>
                 )}
+
+                {sourceChangeNotice && <p role='status' className='absolute bottom-16 left-4 right-4 z-[510] rounded-lg bg-black/80 px-4 py-2 text-center text-white'>{sourceChangeNotice}</p>}
 
                 {/* 换源加载蒙层 */}
                 {isVideoLoading && (
