@@ -63,21 +63,22 @@ export function processImageUrl(originalUrl: string): string {
 }
 
 /**
- * 检查视频元数据与首个主媒体分片，只有可核验的非缓存样本才返回参考下载速度。
+ * 检查首帧起播耗时；只有可核验的非缓存样本才返回参考下载速度。
  * @param m3u8Url m3u8播放列表的URL
  * @returns 视频质量、测速状态、首片加载耗时及可用时的参考下载速度。
  */
-export async function getVideoResolutionFromM3u8(m3u8Url: string, signal?: AbortSignal): Promise<ProbeNetworkInfo & { quality: string }> {
+export async function getVideoResolutionFromM3u8(m3u8Url: string, signal?: AbortSignal): Promise<ProbeNetworkInfo & { quality: string; startupTimeMs: number }> {
   try {
     return await new Promise((resolve, reject) => {
       const abortError = () => Object.assign(new Error('Probe canceled'), { name: 'AbortError' });
       if (signal?.aborted) { reject(abortError()); return; }
+      const probeStartedAt = performance.now();
       const video = document.createElement('video');
       video.muted = true;
-      video.preload = 'metadata';
+      video.preload = 'auto';
       const hls = new Hls();
       let released = false;
-      let metadataLoaded = false;
+      let firstFrameTimeMs: number | undefined;
       let measurement: ProbeNetworkInfo | undefined;
       let measuring = false;
       let measurementTimer: ReturnType<typeof setTimeout> | undefined;
@@ -89,24 +90,34 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string, signal?: Abort
         signal?.removeEventListener('abort', cancelProbe);
         video.onerror = null;
         video.onloadedmetadata = null;
+        video.onloadeddata = null;
+        video.oncanplay = null;
+        video.onplaying = null;
         try { hls.destroy(); } catch { /* Already released. */ }
         video.remove();
       };
       const timeout = setTimeout(() => {
-        cleanup(); reject(new Error('Timeout loading video metadata'));
+        cleanup(); reject(new Error('Timeout waiting for first video frame'));
       }, 4000);
       const cancelProbe = () => { cleanup(); reject(abortError()); };
       signal?.addEventListener('abort', cancelProbe, { once: true });
       if (signal?.aborted) { cancelProbe(); return; }
       const finish = () => {
-        if (released || !metadataLoaded || !measurement) return;
+        if (released) return;
+        if (firstFrameTimeMs === undefined && video.readyState >= 2) {
+          firstFrameTimeMs = Math.max(1, Math.round(performance.now() - probeStartedAt));
+        }
+        if (firstFrameTimeMs === undefined || !measurement) return;
         const width = video.videoWidth;
         const quality = !width ? '未知' : width >= 3840 ? '4K' : width >= 2560 ? '2K'
           : width >= 1920 ? '1080p' : width >= 1280 ? '720p' : width >= 854 ? '480p' : 'SD';
-        cleanup(); resolve({ quality, ...measurement });
+        cleanup(); resolve({ quality, ...measurement, startupTimeMs: firstFrameTimeMs });
       };
       video.onerror = () => { cleanup(); reject(new Error('Failed to load video metadata')); };
-      video.onloadedmetadata = () => { metadataLoaded = true; finish(); };
+      video.onloadedmetadata = finish;
+      video.onloadeddata = finish;
+      video.oncanplay = finish;
+      video.onplaying = finish;
       hls.on(Hls.Events.ERROR, (_event: any, data: any) => {
         if (!released && data.fatal) { cleanup(); reject(new Error(`HLS播放失败: ${data.type}`)); }
       });

@@ -3,6 +3,9 @@ import type { SearchResult } from './types';
 
 export interface PlaybackProbe extends ProbeNetworkInfo {
   quality: string;
+  /** Probe start to the first decodable frame, excluding probe queue wait. */
+  startupTimeMs?: number;
+  episodeIndex?: number;
 }
 export interface ProbedSource {
   source: SearchResult;

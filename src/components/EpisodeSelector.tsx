@@ -111,31 +111,42 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     return currentPage;
   }, [currentPage, descending, pageCount]);
 
+  const probeEpisodeRef = useRef(value);
+  useEffect(() => {
+    if (probeEpisodeRef.current === value) return;
+    probeEpisodeRef.current = value;
+    attemptedSourcesRef.current = new Set();
+    videoInfoMapRef.current = new Map();
+    setAttemptedSources(new Set());
+    setVideoInfoMap(new Map());
+  }, [value]);
+
   // 获取视频信息的函数 - 移除 attemptedSources 依赖避免不必要的重新创建
   const getVideoInfo = useCallback(async (source: SearchResult, signal: AbortSignal) => {
     const sourceKey = `${source.source}-${source.id}`;
-    if (signal.aborted || attemptedSourcesRef.current.has(sourceKey) || inFlightProbesRef.current.has(sourceKey) || !source.episodes?.length) return;
+    if (signal.aborted || attemptedSourcesRef.current.has(sourceKey) || inFlightProbesRef.current.has(sourceKey)) return;
     inFlightProbesRef.current.set(sourceKey, signal);
-    const episodeUrl = source.episodes.length > 1 ? source.episodes[1] : source.episodes[0];
     const markAttempted = () => {
       attemptedSourcesRef.current.add(sourceKey);
       setAttemptedSources(prev => new Set(prev).add(sourceKey));
     };
     try {
+      const episodeUrl = source.episodes?.[value - 1];
+      if (!episodeUrl) throw new Error('该来源没有当前集');
       const info = await getVideoResolutionFromM3u8(episodeUrl, signal);
       if (signal.aborted) return;
       markAttempted();
-      setVideoInfoMap(prev => new Map(prev).set(sourceKey, info));
+      setVideoInfoMap(prev => new Map(prev).set(sourceKey, { ...info, episodeIndex: value - 1 }));
     } catch (error) {
       if (signal.aborted) return;
       markAttempted();
       setVideoInfoMap(prev => new Map(prev).set(sourceKey, {
-        quality: '错误', loadSpeed: '未知', pingTime: 0, hasError: true,
+        quality: '错误', loadSpeed: '未知', pingTime: 0, hasError: true, episodeIndex: value - 1,
       }));
     } finally {
       if (inFlightProbesRef.current.get(sourceKey) === signal) inFlightProbesRef.current.delete(sourceKey);
     }
-  }, []);
+  }, [value]);
 
   // 当有预计算结果时，先合并到videoInfoMap中
   useEffect(() => {
@@ -144,7 +155,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       setVideoInfoMap((prev) => {
         const newMap = new Map(prev);
         precomputedVideoInfo.forEach((value, key) => {
-          newMap.set(key, value);
+          if (value.episodeIndex === undefined || value.episodeIndex === probeEpisodeRef.current - 1) newMap.set(key, value);
         });
         return newMap;
       });
@@ -152,7 +163,8 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       setAttemptedSources((prev) => {
         const newSet = new Set(prev);
         precomputedVideoInfo.forEach((info, key) => {
-          if (!info.hasError) {
+          if (!info.hasError && Number.isFinite(info.startupTimeMs) && (info.startupTimeMs || 0) > 0 &&
+            (info.episodeIndex === undefined || info.episodeIndex === value - 1)) {
             newSet.add(key);
           }
         });
@@ -161,12 +173,13 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
       // 同步更新 ref，确保 getVideoInfo 能立即看到更新
       precomputedVideoInfo.forEach((info, key) => {
-        if (!info.hasError) {
+        if (!info.hasError && Number.isFinite(info.startupTimeMs) && (info.startupTimeMs || 0) > 0 &&
+          (info.episodeIndex === undefined || info.episodeIndex === value - 1)) {
           attemptedSourcesRef.current.add(key);
         }
       });
     }
-  }, [precomputedVideoInfo]);
+  }, [precomputedVideoInfo, value]);
 
   // 读取本地"优选和测速"开关，默认开启
   const [optimizationEnabled] = useState<boolean>(() => {
@@ -606,18 +619,15 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                                 if (!videoInfo.hasError) {
                                   return (
                                     <div className='flex items-end gap-3 text-xs'>
-                                      <div title={videoInfo.speedStatus === 'measured' ? '首个有效分片的参考下载速度，不是宽带测速' : videoInfo.speedStatus === 'cached' ? '本地缓存读取不代表网络下载速度' : '无法取得足够、可核验的网络传输数据，不显示推算带宽'} className='text-green-600 dark:text-green-400 font-medium text-xs'>
-                                        {videoInfo.loadSpeed}
-                                      </div>
-                                      <div className='text-orange-600 dark:text-orange-400 font-medium text-xs'>
-                                        {videoInfo.loadTimeMs !== undefined ? `首片 ${videoInfo.loadTimeMs}ms` : videoInfo.pingTime > 0 ? `响应 ${videoInfo.pingTime}ms` : '耗时未知'}
+                                      <div title='从开始加载此视频地址到首帧可用的探测耗时，包含播放列表、分片和解码准备；会受当前网络及缓存影响' className='text-green-600 dark:text-green-400 font-medium text-xs'>
+                                        {typeof videoInfo.startupTimeMs === 'number' && Number.isFinite(videoInfo.startupTimeMs) && videoInfo.startupTimeMs > 0 ? `起播 ${videoInfo.startupTimeMs}ms` : '起播待测'}
                                       </div>
                                     </div>
                                   );
                                 } else {
                                   return (
                                     <div className='text-red-500/90 dark:text-red-400 font-medium text-xs'>
-                                      无测速数据
+                                      无起播数据
                                     </div>
                                   ); // 占位div
                                 }

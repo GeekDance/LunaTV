@@ -59,7 +59,7 @@ test('aborting a probe destroys HLS and clears the timeout without an extra HEAD
 test('the existing four-second probe timeout releases the media probe', async () => {
   const result = getVideoResolutionFromM3u8('https://example.test/media.m3u8');
   jest.advanceTimersByTime(4000);
-  await expect(result).rejects.toThrow('Timeout loading video metadata');
+  await expect(result).rejects.toThrow('Timeout waiting for first video frame');
   expect(mockDestroy).toHaveBeenCalledTimes(1);
   expect(fetch).not.toHaveBeenCalled();
 });
@@ -90,7 +90,8 @@ test('a cached fragment is labelled as cached instead of reporting gigabytes per
     hls.on.mock.calls.find(([name]: [string]) => name === event)?.[1];
   handler('loading')?.();
   (performance.now as jest.Mock).mockReturnValue(1001);
-  video.onloadedmetadata?.(new Event('loadedmetadata'));
+  Object.defineProperty(video, 'readyState', { value: 2 });
+  video.onloadeddata?.(new Event('loadeddata'));
   handler('loaded')('loaded', {
     frag: {
       type: 'main',
@@ -136,7 +137,8 @@ test('overlapping fragment starts cannot replace the completed fragments own tim
   (performance.now as jest.Mock).mockReturnValue(1399);
   handler('loading')?.();
   (performance.now as jest.Mock).mockReturnValue(1400);
-  video.onloadedmetadata?.(new Event('loadedmetadata'));
+  Object.defineProperty(video, 'readyState', { value: 2 });
+  video.onloadeddata?.(new Event('loadeddata'));
   handler('loaded')('loaded', {
     frag: {
       type: 'main',
@@ -171,4 +173,53 @@ test('canceling between fragment completion and measurement clears every timer',
   await expect(result).rejects.toMatchObject({ name: 'AbortError' });
   expect(jest.getTimerCount()).toBe(0);
   expect(mockDestroy).toHaveBeenCalledTimes(1);
+});
+
+test('startup timing includes playlist and decoding waits and cannot finish on metadata or a cached fragment alone', async () => {
+  jest.spyOn(performance, 'now').mockReturnValue(1000);
+  const result = getVideoResolutionFromM3u8('https://example.test/media.m3u8');
+  let done = false;
+  void result.then(() => {
+    done = true;
+  });
+  const hls = (Hls as unknown as jest.Mock).mock.results[0].value;
+  const video = hls.attachMedia.mock.calls[0][0];
+  Object.defineProperty(video, 'videoWidth', { value: 1920 });
+  Object.defineProperty(video, 'readyState', { configurable: true, value: 1 });
+  (performance.now as jest.Mock).mockReturnValue(1300);
+  video.onloadedmetadata?.(new Event('loadedmetadata'));
+  hls.on.mock.calls.find(([name]: [string]) => name === 'loaded')[1]('loaded', {
+    frag: {
+      type: 'main',
+      sn: 1,
+      url: 'https://example.test/first.ts',
+      stats: { loading: { start: 1200, first: 1201, end: 1202 } },
+    },
+    payload: new ArrayBuffer(1000000),
+  });
+  jest.advanceTimersByTime(0);
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(done).toBe(false);
+  (performance.now as jest.Mock).mockReturnValue(1750);
+  Object.defineProperty(video, 'readyState', { configurable: true, value: 2 });
+  video.onloadeddata?.(new Event('loadeddata'));
+  expect(await result).toMatchObject({ startupTimeMs: 750, loadTimeMs: 2 });
+});
+
+test('metadata-only sources time out instead of being ranked as playable', async () => {
+  const result = getVideoResolutionFromM3u8('https://example.test/media.m3u8');
+  const hls = (Hls as unknown as jest.Mock).mock.results[0].value;
+  const video = hls.attachMedia.mock.calls[0][0];
+  Object.defineProperty(video, 'readyState', { value: 1 });
+  video.onloadedmetadata?.(new Event('loadedmetadata'));
+  hls.on.mock.calls.find(([name]: [string]) => name === 'loaded')[1]('loaded', {
+    frag: { sn: 1, type: 'main' },
+    payload: new ArrayBuffer(100),
+  });
+  jest.advanceTimersByTime(4000);
+  await expect(result).rejects.toThrow('Timeout waiting for first video frame');
+  expect(mockDestroy).toHaveBeenCalledTimes(1);
+  expect(video.onloadeddata).toBeNull();
+  expect(jest.getTimerCount()).toBe(0);
 });

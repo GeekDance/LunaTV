@@ -5,16 +5,6 @@ export interface SourceVideoInfo extends PlaybackProbe {
   hasError?: boolean;
 }
 
-function bytesPerSecond(value: string): number {
-  const match = value
-    .trim()
-    .match(/^(\d+(?:\.\d+)?|\.\d+)\s*([KMGT]?)(i?)B\s*\/\s*s$/i);
-  if (!match) return 0;
-  const magnitude = ['', 'K', 'M', 'G', 'T'].indexOf(match[2].toUpperCase());
-  const speed = Number(match[1]) * (match[3] ? 1024 : 1000) ** magnitude;
-  return Number.isFinite(speed) && speed > 0 ? speed : 0;
-}
-
 /** Rank the displayed alternatives only; changing rank must never select playback. */
 export function sortPlaybackSources(
   sources: readonly SearchResult[],
@@ -29,25 +19,11 @@ export function sortPlaybackSources(
       currentId !== undefined &&
       String(source.source) === String(currentSource) &&
       String(source.id) === String(currentId);
-    const group = current ? 0 : info?.hasError ? 3 : info ? 1 : 2;
+    const time = info?.startupTimeMs;
+    const timed = typeof time === 'number' && Number.isFinite(time) && time > 0;
     return {
-      group,
-      speed:
-        info &&
-        !info.hasError &&
-        (!info.speedStatus || info.speedStatus === 'measured')
-          ? bytesPerSecond(info.loadSpeed)
-          : 0,
-      loadTime:
-        info &&
-        Number.isFinite(info.loadTimeMs) &&
-        (info.loadTimeMs as number) > 0
-          ? (info.loadTimeMs as number)
-          : Infinity,
-      ping:
-        info && Number.isFinite(info.pingTime) && info.pingTime > 0
-          ? info.pingTime
-          : Infinity,
+      group: current ? 0 : info?.hasError ? 3 : timed ? 1 : 2,
+      time: timed ? time : Infinity,
     };
   };
   return sources
@@ -55,12 +31,7 @@ export function sortPlaybackSources(
     .sort(
       (a, b) =>
         a.group - b.group ||
-        b.speed - a.speed ||
-        (a.group === 1 && b.group === 1 && a.speed === 0 && b.speed === 0
-          ? a.loadTime - b.loadTime
-          : 0) ||
-        // Latency breaks ties only between successfully checked streams.
-        (a.group === 1 && b.group === 1 ? a.ping - b.ping : 0) ||
+        (a.group === 1 && b.group === 1 ? a.time - b.time : 0) ||
         a.index - b.index
     )
     .map((entry) => entry.source);

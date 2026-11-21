@@ -175,13 +175,37 @@ test('reorders source cards as measurements arrive while pinning the current sou
       's1-1',
       { quality: '错误', loadSpeed: '未知', pingTime: 0, hasError: true },
     ],
-    ['s2-2', { quality: '1080p', loadSpeed: '900 KB/s', pingTime: 10 }],
-    ['s3-3', { quality: '1080p', loadSpeed: '2 MB/s', pingTime: 15 }],
+    [
+      's2-2',
+      {
+        quality: '1080p',
+        loadSpeed: '900 KB/s',
+        pingTime: 10,
+        startupTimeMs: 900,
+      },
+    ],
+    [
+      's3-3',
+      {
+        quality: '1080p',
+        loadSpeed: '2 MB/s',
+        pingTime: 15,
+        startupTimeMs: 200,
+      },
+    ],
     [
       's4-4',
       { quality: '错误', loadSpeed: '未知', pingTime: 0, hasError: true },
     ],
-    ['s5-5', { quality: '1080p', loadSpeed: '2 MB/s', pingTime: 5 }],
+    [
+      's5-5',
+      {
+        quality: '1080p',
+        loadSpeed: '2 MB/s',
+        pingTime: 5,
+        startupTimeMs: 100,
+      },
+    ],
   ]);
   const choose = jest.fn();
   const props = {
@@ -214,7 +238,12 @@ test('reorders source cards as measurements arrive while pinning the current sou
   fireEvent.click(screen.getByText('Source 3'));
   expect(choose).toHaveBeenCalledWith('s3', '3', 'Demo');
   const updated = new Map(results);
-  updated.set('s0-0', { quality: '1080p', loadSpeed: '8 MB/s', pingTime: 10 });
+  updated.set('s0-0', {
+    quality: '1080p',
+    loadSpeed: '8 MB/s',
+    pingTime: 10,
+    startupTimeMs: 50,
+  });
   view.rerender(
     <EpisodeSelector
       {...props}
@@ -246,6 +275,7 @@ test('cache and unmeasurable sources stay playable without fake bandwidth or pin
         pingTime: 0,
         speedStatus: 'cached' as const,
         loadTimeMs: 2,
+        startupTimeMs: 320,
       },
     ],
     [
@@ -256,6 +286,7 @@ test('cache and unmeasurable sources stay playable without fake bandwidth or pin
         pingTime: 0,
         speedStatus: 'unavailable' as const,
         loadTimeMs: 450,
+        startupTimeMs: 780,
       },
     ],
   ]);
@@ -269,13 +300,76 @@ test('cache and unmeasurable sources stay playable without fake bandwidth or pin
     />
   );
   await act(async () => undefined);
-  expect(screen.getByText('缓存命中')).toHaveAttribute(
+  expect(screen.getByText('起播 320ms')).toHaveAttribute(
     'title',
-    expect.stringContaining('不代表网络下载速度')
+    expect.stringContaining('首帧可用')
   );
-  expect(screen.getByText('速度不可测')).toBeInTheDocument();
-  expect(screen.getByText('首片 2ms')).toBeInTheDocument();
-  expect(screen.getByText('首片 450ms')).toBeInTheDocument();
+  expect(screen.getByText('起播 780ms')).toBeInTheDocument();
+  expect(screen.queryByText('速度不可测')).not.toBeInTheDocument();
+  expect(screen.queryByText('首片 2ms')).not.toBeInTheDocument();
   expect(screen.queryByText('检测失败')).not.toBeInTheDocument();
   expect(screen.queryByText('0ms')).not.toBeInTheDocument();
+});
+
+test('measures the selected episode and discards stale measurements when episodes change', async () => {
+  Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+    configurable: true,
+    value: jest.fn(),
+  });
+  localStorage.clear();
+  const rows = sources(1);
+  rows[0].episodes = [
+    'https://example.test/first.m3u8',
+    'https://example.test/second.m3u8',
+    'https://example.test/third.m3u8',
+  ];
+  const probe = getVideoResolutionFromM3u8 as jest.Mock;
+  probe
+    .mockReset()
+    .mockResolvedValue({
+      quality: '1080p',
+      loadSpeed: '速度不可测',
+      pingTime: 0,
+      startupTimeMs: 100,
+    });
+  const stale = new Map([
+    [
+      's0-0',
+      {
+        quality: '1080p',
+        loadSpeed: '未知',
+        pingTime: 0,
+        startupTimeMs: 50,
+        episodeIndex: 1,
+      },
+    ],
+  ]);
+  const view = render(
+    <EpisodeSelector
+      totalEpisodes={3}
+      episodes_titles={['1', '2', '3']}
+      value={1}
+      availableSources={rows}
+      openSourcesRequest={1}
+      precomputedVideoInfo={stale}
+    />
+  );
+  await act(async () => undefined);
+  expect(probe.mock.calls[0][0]).toBe('https://example.test/first.m3u8');
+  expect(screen.queryByText('起播 50ms')).not.toBeInTheDocument();
+  view.rerender(
+    <EpisodeSelector
+      totalEpisodes={3}
+      episodes_titles={['1', '2', '3']}
+      value={3}
+      availableSources={rows}
+      openSourcesRequest={1}
+      precomputedVideoInfo={stale}
+    />
+  );
+  await act(async () => undefined);
+  expect(probe).toHaveBeenCalledTimes(2);
+  expect(probe.mock.calls[1][0]).toBe('https://example.test/third.m3u8');
+  expect(screen.getByText('起播 100ms')).toBeInTheDocument();
+  view.unmount();
 });

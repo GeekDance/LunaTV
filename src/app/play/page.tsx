@@ -695,7 +695,10 @@ function PlayPageClient() {
           fetchDetail: currentSource && currentId ? fetchSourceDetail : undefined,
           search: fetchSourcesData,
           optimize: optimizationEnabled,
-          probe: (source, signal) => getVideoResolutionFromM3u8(source.episodes[currentEpisodeIndex] || source.episodes[0], signal),
+          probe: async (source, signal) => ({
+            ...await getVideoResolutionFromM3u8(source.episodes[currentEpisodeIndex] || source.episodes[0], signal),
+            episodeIndex: currentEpisodeIndex,
+          }),
           choose: chooseBestSource,
           onSources: sources => {
             availableSourcesRef.current = sources;
@@ -1657,7 +1660,10 @@ function PlayPageClient() {
           },
           urlFor: source => source.episodes[currentEpisodeIndex],
           allowed: (source, url) => !failedSourcesRef.current.has(JSON.stringify([source.source, source.id])) && !failedStreamsRef.current.has(url),
-          probe: getVideoResolutionFromM3u8,
+          probe: async (url, signal) => ({
+            ...await getVideoResolutionFromM3u8(url, signal),
+            episodeIndex: currentEpisodeIndex,
+          }),
           onFound: (source, info) => {
             if (!active || playbackSessionRef.current !== session) return;
             recoveryCountRef.current++;

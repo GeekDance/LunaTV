@@ -1,100 +1,80 @@
-import { sortPlaybackSources } from '../source-ranking.client';
+import { sortPlaybackSources, SourceVideoInfo } from '../source-ranking.client';
 import type { SearchResult } from '../types';
 
 const source = (id: string) => ({ source: id, id, title: id } as SearchResult);
-const info = (loadSpeed: string, pingTime = 20, hasError = false) => ({
+const info = (startupTimeMs?: number, hasError = false) => ({
   quality: '1080p',
-  loadSpeed,
-  pingTime,
+  loadSpeed: '速度不可测',
+  pingTime: 20,
+  startupTimeMs,
   hasError,
 });
 
-test('pins current source, ranks verified speeds, then pending and failed sources', () => {
+test('pins current source, ranks actual startup times, then pending and failed sources', () => {
   const sources = ['pending', 'bad', 'slow', 'fast', 'current', 'tied'].map(
     source
   );
   Object.freeze(sources);
-  const results = new Map([
-    ['bad-bad', info('999 MB/s', 1, true)],
-    ['slow-slow', info('900 KB/s')],
-    ['fast-fast', info('2 MB/s', 15)],
-    ['current-current', info('未知', 0, true)],
-    ['tied-tied', info('2 MB/s', 5)],
+  const results = new Map<string, SourceVideoInfo>([
+    ['bad-bad', info(1, true)],
+    ['slow-slow', info(900)],
+    ['fast-fast', info(200)],
+    ['current-current', info(undefined, true)],
+    ['tied-tied', info(200)],
   ]);
   expect(
     sortPlaybackSources(sources, results, 'current', 'current').map((s) => s.id)
-  ).toEqual(['current', 'tied', 'fast', 'slow', 'pending', 'bad']);
+  ).toEqual(['current', 'fast', 'tied', 'slow', 'pending', 'bad']);
   expect(sources[0].id).toBe('pending');
 });
-
-test('compares units numerically, handles missing metrics, and keeps equal results stable', () => {
-  const sources = ['kb', 'mb', 'gb', 'unknown', 'missing', 'tie1', 'tie2'].map(
-    source
-  );
-  const results = new Map([
-    ['kb-kb', info('900 KB/s')],
-    ['mb-mb', info('1 MB/s')],
-    ['gb-gb', info('0.01 GB/s')],
-    ['unknown-unknown', info('未知', -1)],
-    ['missing-missing', info('NaN MB/s', NaN)],
-    ['tie1-tie1', info('1000 KB/s', 20)],
-    ['tie2-tie2', info('1 MB/s', 20)],
+test('download speed, fragment time and ping never override startup time', () => {
+  const sources = ['bandwidth', 'instantFragment', 'fastFrame'].map(source);
+  const results = new Map<string, SourceVideoInfo>([
+    [
+      'bandwidth-bandwidth',
+      { ...info(1500), loadSpeed: '999 MB/s', pingTime: 1 },
+    ],
+    ['instantFragment-instantFragment', { ...info(800), loadTimeMs: 1 }],
+    [
+      'fastFrame-fastFrame',
+      { ...info(100), loadSpeed: '速度不可测', pingTime: 100 },
+    ],
   ]);
   expect(sortPlaybackSources(sources, results).map((s) => s.id)).toEqual([
-    'gb',
-    'mb',
-    'tie1',
-    'tie2',
-    'kb',
-    'unknown',
-    'missing',
+    'fastFrame',
+    'instantFragment',
+    'bandwidth',
   ]);
 });
-
-test('unknown zero latency cannot outrank a measured latency at the same speed', () => {
-  const sources = ['unknown', 'measured'].map(source);
-  const results = new Map([
-    ['unknown-unknown', info('2 MB/s', 0)],
-    ['measured-measured', info('2 MB/s', 30)],
+test('invalid or legacy timings stay pending and equal startup times preserve discovery order', () => {
+  const sources = [
+    'zero',
+    'negative',
+    'nan',
+    'infinity',
+    'legacy',
+    'a',
+    'b',
+    'failed',
+  ].map(source);
+  const results = new Map<string, SourceVideoInfo>([
+    ['zero-zero', info(0)],
+    ['negative-negative', info(-1)],
+    ['nan-nan', info(NaN)],
+    ['infinity-infinity', info(Infinity)],
+    ['legacy-legacy', { ...info(), loadTimeMs: 1 }],
+    ['a-a', info(300)],
+    ['b-b', info(300)],
+    ['failed-failed', info(1, true)],
   ]);
   expect(sortPlaybackSources(sources, results).map((s) => s.id)).toEqual([
-    'measured',
-    'unknown',
-  ]);
-});
-
-test('cache data never invents speed priority and unknown rates use first-fragment time', () => {
-  const sources = ['cache', 'slow', 'unknown', 'fast'].map(source);
-  const results = new Map([
-    [
-      'cache-cache',
-      { ...info('999 MB/s'), speedStatus: 'cached' as const, loadTimeMs: 2 },
-    ],
-    [
-      'slow-slow',
-      {
-        ...info('500 KB/s'),
-        speedStatus: 'measured' as const,
-        loadTimeMs: 400,
-      },
-    ],
-    [
-      'unknown-unknown',
-      {
-        ...info('速度不可测'),
-        speedStatus: 'unavailable' as const,
-        loadTimeMs: 100,
-      },
-    ],
-    [
-      'fast-fast',
-      { ...info('1 MiB/s'), speedStatus: 'measured' as const, loadTimeMs: 300 },
-    ],
-  ]);
-  expect(sortPlaybackSources(sources, results).map((s) => s.id)).toEqual([
-    'fast',
-    'slow',
-    'cache',
-    'unknown',
+    'a',
+    'b',
+    'zero',
+    'negative',
+    'nan',
+    'infinity',
+    'legacy',
+    'failed',
   ]);
 });
