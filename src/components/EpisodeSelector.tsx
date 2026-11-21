@@ -76,6 +76,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   // 使用 ref 来避免闭包问题
   const attemptedSourcesRef = useRef<Set<string>>(new Set());
   const videoInfoMapRef = useRef<Map<string, VideoInfo>>(new Map());
+  const inFlightProbesRef = useRef<Map<string, AbortSignal>>(new Map());
 
   // 同步状态到 ref
   useEffect(() => {
@@ -108,37 +109,28 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   }, [currentPage, descending, pageCount]);
 
   // 获取视频信息的函数 - 移除 attemptedSources 依赖避免不必要的重新创建
-  const getVideoInfo = useCallback(async (source: SearchResult) => {
+  const getVideoInfo = useCallback(async (source: SearchResult, signal: AbortSignal) => {
     const sourceKey = `${source.source}-${source.id}`;
-
-    // 使用 ref 获取最新的状态，避免闭包问题
-    if (attemptedSourcesRef.current.has(sourceKey)) {
-      return;
-    }
-
-    // 获取第一集的URL
-    if (!source.episodes || source.episodes.length === 0) {
-      return;
-    }
-    const episodeUrl =
-      source.episodes.length > 1 ? source.episodes[1] : source.episodes[0];
-
-    // 标记为已尝试
-    setAttemptedSources((prev) => new Set(prev).add(sourceKey));
-
+    if (signal.aborted || attemptedSourcesRef.current.has(sourceKey) || inFlightProbesRef.current.has(sourceKey) || !source.episodes?.length) return;
+    inFlightProbesRef.current.set(sourceKey, signal);
+    const episodeUrl = source.episodes.length > 1 ? source.episodes[1] : source.episodes[0];
+    const markAttempted = () => {
+      attemptedSourcesRef.current.add(sourceKey);
+      setAttemptedSources(prev => new Set(prev).add(sourceKey));
+    };
     try {
-      const info = await getVideoResolutionFromM3u8(episodeUrl);
-      setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
+      const info = await getVideoResolutionFromM3u8(episodeUrl, signal);
+      if (signal.aborted) return;
+      markAttempted();
+      setVideoInfoMap(prev => new Map(prev).set(sourceKey, info));
     } catch (error) {
-      // 失败时保存错误状态
-      setVideoInfoMap((prev) =>
-        new Map(prev).set(sourceKey, {
-          quality: '错误',
-          loadSpeed: '未知',
-          pingTime: 0,
-          hasError: true,
-        })
-      );
+      if (signal.aborted) return;
+      markAttempted();
+      setVideoInfoMap(prev => new Map(prev).set(sourceKey, {
+        quality: '错误', loadSpeed: '未知', pingTime: 0, hasError: true,
+      }));
+    } finally {
+      if (inFlightProbesRef.current.get(sourceKey) === signal) inFlightProbesRef.current.delete(sourceKey);
     }
   }, []);
 
@@ -188,34 +180,26 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     return true;
   });
 
-  // 当切换到换源tab并且有源数据时，异步获取视频信息 - 移除 attemptedSources 依赖避免循环触发
+  // Progressive search updates replace this pool; obsolete work must not compete with playback.
   useEffect(() => {
-    const fetchVideoInfosInBatches = async () => {
-      if (
-        !optimizationEnabled || // 若关闭测速则直接退出
-        activeTab !== 'sources' ||
-        availableSources.length === 0
-      )
-        return;
-
-      // 筛选出尚未测速的播放源
-      const pendingSources = availableSources.filter((source) => {
-        const sourceKey = `${source.source}-${source.id}`;
-        return !attemptedSourcesRef.current.has(sourceKey);
-      });
-
-      if (pendingSources.length === 0) return;
-
-      const batchSize = Math.ceil(pendingSources.length / 2);
-
-      for (let start = 0; start < pendingSources.length; start += batchSize) {
-        const batch = pendingSources.slice(start, start + batchSize);
-        await Promise.all(batch.map(getVideoInfo));
+    if (!optimizationEnabled || activeTab !== 'sources' || !availableSources.length) return;
+    const controller = new AbortController();
+    const inFlight = inFlightProbesRef.current;
+    const pendingSources = availableSources.filter(source => !attemptedSourcesRef.current.has(`${source.source}-${source.id}`));
+    let cursor = 0;
+    const work = async () => {
+      while (!controller.signal.aborted && cursor < pendingSources.length) {
+        const source = pendingSources[cursor++];
+        await getVideoInfo(source, controller.signal);
       }
     };
-
-    fetchVideoInfosInBatches();
-    // 依赖项保持与之前一致
+    void Promise.all(Array.from({ length: Math.min(4, pendingSources.length) }, work));
+    return () => {
+      controller.abort();
+      inFlight.forEach((signal, key) => {
+        if (signal === controller.signal) inFlight.delete(key);
+      });
+    };
   }, [activeTab, availableSources, getVideoInfo, optimizationEnabled]);
 
   // 升序分页标签

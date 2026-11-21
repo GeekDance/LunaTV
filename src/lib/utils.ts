@@ -65,7 +65,7 @@ export function processImageUrl(originalUrl: string): string {
  * @param m3u8Url m3u8播放列表的URL
  * @returns Promise<{quality: string, loadSpeed: string, pingTime: number}> 视频质量等级和网络信息
  */
-export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
+export async function getVideoResolutionFromM3u8(m3u8Url: string, signal?: AbortSignal): Promise<{
   quality: string; // 如720p、1080p等
   loadSpeed: string; // 自动转换为KB/s或MB/s
   pingTime: number; // 网络延迟（毫秒）
@@ -73,6 +73,11 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
   try {
     // 直接使用m3u8 URL作为视频源，避免CORS问题
     return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(Object.assign(new Error('Probe canceled'), { name: 'AbortError' }));
+        return;
+      }
+      const headController = new AbortController();
       const video = document.createElement('video');
       video.muted = true;
       video.preload = 'metadata';
@@ -82,7 +87,7 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
       let pingTime = 0;
 
       // 测量ping时间（使用m3u8 URL）
-      fetch(m3u8Url, { method: 'HEAD', mode: 'no-cors' })
+      fetch(m3u8Url, { method: 'HEAD', mode: 'no-cors', signal: headController.signal })
         .then(() => {
           pingTime = performance.now() - pingStart;
         })
@@ -98,6 +103,11 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
       const cleanup = () => {
         if (released) return;
         released = true;
+        clearTimeout(timeout);
+        signal?.removeEventListener('abort', cancelProbe);
+        headController.abort();
+        video.onerror = null;
+        video.onloadedmetadata = null;
         try {
           hls.destroy();
         } catch (e) {
@@ -111,6 +121,12 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
         cleanup();
         reject(new Error('Timeout loading video metadata'));
       }, 4000);
+      const cancelProbe = () => {
+        cleanup();
+        reject(Object.assign(new Error('Probe canceled'), { name: 'AbortError' }));
+      };
+      signal?.addEventListener('abort', cancelProbe, { once: true });
+      if (signal?.aborted) { cancelProbe(); return; }
 
       video.onerror = () => {
         clearTimeout(timeout);
@@ -219,6 +235,7 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
       };
     });
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
     throw new Error(
       `Error getting video resolution: ${error instanceof Error ? error.message : String(error)
       }`
