@@ -1622,7 +1622,226 @@ function PlayPageClient() {
           <div className='text-center max-w-md mx-auto px-6'>
             {/* 动画影院图标 */}
             <div className='relative mb-8'>
-              <div className='relative mx-auto w-24 h-24 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transf…2624 tokens truncated…ull rounded-xl overflow-hidden shadow-lg'
+              <div className='relative mx-auto w-24 h-24 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transform duration-300'>
+                <div className='text-white text-4xl'>
+                  {loadingStage === 'searching' && '🔍'}
+                  {loadingStage === 'preferring' && '⚡'}
+                  {loadingStage === 'fetching' && '🎬'}
+                  {loadingStage === 'ready' && '✨'}
+                </div>
+                {/* 旋转光环 */}
+                <div className='absolute -inset-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl opacity-20 animate-spin'></div>
+              </div>
+
+              {/* 浮动粒子效果 */}
+              <div className='absolute top-0 left-0 w-full h-full pointer-events-none'>
+                <div className='absolute top-2 left-2 w-2 h-2 bg-green-400 rounded-full animate-bounce'></div>
+                <div
+                  className='absolute top-4 right-4 w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce'
+                  style={{ animationDelay: '0.5s' }}
+                ></div>
+                <div
+                  className='absolute bottom-3 left-6 w-1 h-1 bg-lime-400 rounded-full animate-bounce'
+                  style={{ animationDelay: '1s' }}
+                ></div>
+              </div>
+            </div>
+
+            {/* 进度指示器 */}
+            <div className='mb-6 w-80 mx-auto'>
+              <div className='flex justify-center space-x-2 mb-4'>
+                <div
+                  className={`w-3 h-3 rounded-full transition-all duration-500 ${loadingStage === 'searching' || loadingStage === 'fetching'
+                    ? 'bg-green-500 scale-125'
+                    : loadingStage === 'preferring' ||
+                      loadingStage === 'ready'
+                      ? 'bg-green-500'
+                      : 'bg-gray-300'
+                    }`}
+                ></div>
+                <div
+                  className={`w-3 h-3 rounded-full transition-all duration-500 ${loadingStage === 'preferring'
+                    ? 'bg-green-500 scale-125'
+                    : loadingStage === 'ready'
+                      ? 'bg-green-500'
+                      : 'bg-gray-300'
+                    }`}
+                ></div>
+                <div
+                  className={`w-3 h-3 rounded-full transition-all duration-500 ${loadingStage === 'ready'
+                    ? 'bg-green-500 scale-125'
+                    : 'bg-gray-300'
+                    }`}
+                ></div>
+              </div>
+
+              {/* 进度条 */}
+              <div className='w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden'>
+                <div
+                  className='h-full bg-gradient-to-r from-green-500 to-emerald-600 rounded-full transition-all duration-1000 ease-out'
+                  style={{
+                    width:
+                      loadingStage === 'searching' ||
+                        loadingStage === 'fetching'
+                        ? '33%'
+                        : loadingStage === 'preferring'
+                          ? '66%'
+                          : '100%',
+                  }}
+                ></div>
+              </div>
+            </div>
+
+            {/* 加载消息 */}
+            <div className='space-y-2'>
+              <p className='text-xl font-semibold text-gray-800 dark:text-gray-200 animate-pulse'>
+                {loadingMessage}
+              </p>
+            </div>
+          </div>
+        </div>
+      </PageLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageLayout activePath='/play'>
+        <div className='flex items-center justify-center min-h-screen bg-transparent'>
+          <div className='text-center max-w-md mx-auto px-6'>
+            {/* 错误图标 */}
+            <div className='relative mb-8'>
+              <div className='relative mx-auto w-24 h-24 bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transform duration-300'>
+                <div className='text-white text-4xl'>😵</div>
+                {/* 脉冲效果 */}
+                <div className='absolute -inset-2 bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl opacity-20 animate-pulse'></div>
+              </div>
+
+              {/* 浮动错误粒子 */}
+              <div className='absolute top-0 left-0 w-full h-full pointer-events-none'>
+                <div className='absolute top-2 left-2 w-2 h-2 bg-red-400 rounded-full animate-bounce'></div>
+                <div
+                  className='absolute top-4 right-4 w-1.5 h-1.5 bg-orange-400 rounded-full animate-bounce'
+                  style={{ animationDelay: '0.5s' }}
+                ></div>
+                <div
+                  className='absolute bottom-3 left-6 w-1 h-1 bg-yellow-400 rounded-full animate-bounce'
+                  style={{ animationDelay: '1s' }}
+                ></div>
+              </div>
+            </div>
+
+            {/* 错误信息 */}
+            <div className='space-y-4 mb-8'>
+              <h2 className='text-2xl font-bold text-gray-800 dark:text-gray-200'>
+                哎呀，出现了一些问题
+              </h2>
+              <div className='bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4'>
+                <p className='text-red-600 dark:text-red-400 font-medium'>
+                  {error}
+                </p>
+              </div>
+              <p className='text-sm text-gray-500 dark:text-gray-400'>
+                请检查网络连接或尝试刷新页面
+              </p>
+            </div>
+
+            {/* 操作按钮 */}
+            <div className='space-y-3'>
+              <button
+                onClick={() =>
+                  videoTitle
+                    ? router.push(`/search?q=${encodeURIComponent(videoTitle)}`)
+                    : router.back()
+                }
+                className='w-full px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-medium hover:from-green-600 hover:to-emerald-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl'
+              >
+                {videoTitle ? '🔍 返回搜索' : '← 返回上页'}
+              </button>
+
+              <button
+                onClick={() => window.location.reload()}
+                className='w-full px-6 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200'
+              >
+                🔄 重新尝试
+              </button>
+            </div>
+          </div>
+        </div>
+      </PageLayout>
+    );
+  }
+
+  return (
+    <PageLayout activePath='/play'>
+      <div className='flex flex-col gap-3 py-4 px-5 lg:px-[3rem] 2xl:px-20'>
+        {/* 第一行：影片标题 */}
+        <div className='py-1'>
+          <h1 className='text-xl font-semibold text-gray-900 dark:text-gray-100'>
+            {videoTitle || '影片标题'}
+            {totalEpisodes > 1 && (
+              <span className='text-gray-500 dark:text-gray-400'>
+                {` > ${detail?.episodes_titles?.[currentEpisodeIndex] || `第 ${currentEpisodeIndex + 1} 集`}`}
+              </span>
+            )}
+          </h1>
+        </div>
+        {/* 第二行：播放器和选集 */}
+        <div className='space-y-2'>
+          {/* 折叠控制 - 仅在 lg 及以上屏幕显示 */}
+          <div className='hidden lg:flex justify-end'>
+            <button
+              onClick={() =>
+                setIsEpisodeSelectorCollapsed(!isEpisodeSelectorCollapsed)
+              }
+              className='group relative flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-white/80 hover:bg-white dark:bg-gray-800/80 dark:hover:bg-gray-800 backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 shadow-sm hover:shadow-md transition-all duration-200'
+              title={
+                isEpisodeSelectorCollapsed ? '显示选集面板' : '隐藏选集面板'
+              }
+            >
+              <svg
+                className={`w-3.5 h-3.5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${isEpisodeSelectorCollapsed ? 'rotate-180' : 'rotate-0'
+                  }`}
+                fill='none'
+                stroke='currentColor'
+                viewBox='0 0 24 24'
+              >
+                <path
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  strokeWidth='2'
+                  d='M9 5l7 7-7 7'
+                />
+              </svg>
+              <span className='text-xs font-medium text-gray-600 dark:text-gray-300'>
+                {isEpisodeSelectorCollapsed ? '显示' : '隐藏'}
+              </span>
+
+              {/* 精致的状态指示点 */}
+              <div
+                className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full transition-all duration-200 ${isEpisodeSelectorCollapsed
+                  ? 'bg-orange-400 animate-pulse'
+                  : 'bg-green-400'
+                  }`}
+              ></div>
+            </button>
+          </div>
+
+          <div
+            className={`grid gap-4 lg:h-[500px] xl:h-[650px] 2xl:h-[750px] transition-all duration-300 ease-in-out ${isEpisodeSelectorCollapsed
+              ? 'grid-cols-1'
+              : 'grid-cols-1 md:grid-cols-4'
+              }`}
+          >
+            {/* 播放器 */}
+            <div
+              className={`h-full transition-all duration-300 ease-in-out rounded-xl border border-white/0 dark:border-white/30 ${isEpisodeSelectorCollapsed ? 'col-span-1' : 'md:col-span-3'
+                }`}
+            >
+              <div className='relative w-full h-[300px] lg:h-full'>
+                <div
+                  ref={artRef}
+                  className='bg-black w-full h-full rounded-xl overflow-hidden shadow-lg'
                 ></div>
 
                 {playbackIssue && (
