@@ -9,16 +9,11 @@ import React, {
   useState,
 } from 'react';
 
+import { sortPlaybackSources, SourceVideoInfo } from '@/lib/source-ranking.client';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 
-// 定义视频信息类型
-interface VideoInfo {
-  quality: string;
-  loadSpeed: string;
-  pingTime: number;
-  hasError?: boolean; // 添加错误状态标识
-}
+type VideoInfo = SourceVideoInfo;
 
 interface EpisodeSelectorProps {
   /** 总集数 */
@@ -503,19 +498,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
           {availableSources.length > 0 && (
               <div className='flex-1 overflow-y-auto space-y-2 pb-20'>
-                {availableSources
-                  .slice()
-                  .sort((a, b) => {
-                    const aIsCurrent =
-                      a.source?.toString() === currentSource?.toString() &&
-                      a.id?.toString() === currentId?.toString();
-                    const bIsCurrent =
-                      b.source?.toString() === currentSource?.toString() &&
-                      b.id?.toString() === currentId?.toString();
-                    if (aIsCurrent && !bIsCurrent) return -1;
-                    if (!aIsCurrent && bIsCurrent) return 1;
-                    return 0;
-                  })
+                {sortPlaybackSources(availableSources, videoInfoMap, currentSource, currentId)
                   .map((source, index) => {
                     const isCurrentSource =
                       source.source?.toString() === currentSource?.toString() &&

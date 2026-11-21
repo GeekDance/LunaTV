@@ -166,3 +166,72 @@ test('does not show an empty state before discovery finishes', () => {
   view.rerender(<EpisodeSelector {...props} availableSources={[]} />);
   expect(screen.getByText('暂无可用的换源')).toBeInTheDocument();
 });
+
+test('reorders source cards as measurements arrive while pinning the current source', async () => {
+  const all = sources(6);
+  Object.freeze(all);
+  const results = new Map([
+    [
+      's1-1',
+      { quality: '错误', loadSpeed: '未知', pingTime: 0, hasError: true },
+    ],
+    ['s2-2', { quality: '1080p', loadSpeed: '900 KB/s', pingTime: 10 }],
+    ['s3-3', { quality: '1080p', loadSpeed: '2 MB/s', pingTime: 15 }],
+    [
+      's4-4',
+      { quality: '错误', loadSpeed: '未知', pingTime: 0, hasError: true },
+    ],
+    ['s5-5', { quality: '1080p', loadSpeed: '2 MB/s', pingTime: 5 }],
+  ]);
+  const choose = jest.fn();
+  const props = {
+    totalEpisodes: 1,
+    episodes_titles: ['Episode 1'],
+    probeEnabled: false,
+    sourceSearchLoading: true,
+    currentSource: 's4',
+    currentId: '4',
+    onSourceChange: choose,
+  };
+  const view = render(
+    <EpisodeSelector
+      {...props}
+      availableSources={all}
+      precomputedVideoInfo={results}
+    />
+  );
+  await act(async () => undefined);
+  const order = () =>
+    screen.getAllByText(/^Source \d$/).map((element) => element.textContent);
+  expect(order()).toEqual([
+    'Source 4',
+    'Source 5',
+    'Source 3',
+    'Source 2',
+    'Source 0',
+    'Source 1',
+  ]);
+  fireEvent.click(screen.getByText('Source 3'));
+  expect(choose).toHaveBeenCalledWith('s3', '3', 'Demo');
+  const updated = new Map(results);
+  updated.set('s0-0', { quality: '1080p', loadSpeed: '8 MB/s', pingTime: 10 });
+  view.rerender(
+    <EpisodeSelector
+      {...props}
+      availableSources={all}
+      precomputedVideoInfo={updated}
+    />
+  );
+  await act(async () => undefined);
+  expect(order()).toEqual([
+    'Source 4',
+    'Source 0',
+    'Source 5',
+    'Source 3',
+    'Source 2',
+    'Source 1',
+  ]);
+  expect(choose).toHaveBeenCalledTimes(1);
+  expect(all[0].source).toBe('s0');
+  view.unmount();
+});
